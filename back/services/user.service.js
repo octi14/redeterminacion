@@ -3,6 +3,10 @@ const bcrypt = require("bcryptjs");
 const config = require("../config");
 let User = require("../models/user.model");
 
+exports.getAll = async function () {
+  return User.find()
+}
+
 exports.authenticate = async function ({ username, password }) {
   const user = await User.findOne({ username });
   if (user && bcrypt.compareSync(password, user.password)) {
@@ -32,7 +36,7 @@ exports.create = async function ({ username, password }) {
 
   const user = await User.create({
     username,
-    password: bcrypt.hashSync(password),
+    password,//: bcrypt.hashSync(password)
   });
 
   // borro la contraseña para no devolverla en la respuesta
