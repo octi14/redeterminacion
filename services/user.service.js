@@ -9,6 +9,8 @@ exports.getAll = async function () {
 
 exports.authenticate = async function ({ username, password }) {
   const user = await User.findOne({ username });
+  console.log(password + user.password + "|");
+  console.log(bcrypt.compareSync(password,user.password));
   if (user && bcrypt.compareSync(password, user.password)) {
     const token = jwt.sign({ sub: user.id }, config.TOKEN_SECRET, {
       expiresIn: config.TOKEN_TIMEOUT,
@@ -36,7 +38,7 @@ exports.create = async function ({ username, password }) {
 
   const user = await User.create({
     username,
-    password,//: bcrypt.hashSync(password)
+    password: bcrypt.hashSync(password),
   });
 
   // borro la contraseña para no devolverla en la respuesta
