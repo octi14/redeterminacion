@@ -2,10 +2,12 @@ let ObraService = require("../services/obra.service");
 
 exports.getAll = async function (req, res) {
   try {
-    const { sort, skip, limit } = req.pagination;
-    let recipes = await RecipeService.findAll(sort, skip, limit);
+    // const { sort, skip, limit } = req.pagination;
+    let obras = await ObraService.findAll(
+      // sort, skip, limit
+      );
     return res.status(200).json({
-      data: recipes,
+      data: obras,
     });
   } catch (e) {
     return res.status(400).json({
@@ -22,17 +24,22 @@ exports.add = async function (req, res) {
     const {
       name,
       description,
+      budget,
     } = req.body.obra;
 
     const obraData = {
       name,
       description,
+      budget,
     };
-    const createdRecipe = await RecipeService.create(recipeData);
+
+    console.log(obraData);
+
+    const createdFile = await ObraService.create(obraData);
 
     return res.status(201).json({
       message: "Created",
-      data: createdRecipe,
+      data: createdFile,
     });
   } catch (e) {
     return res.status(400).json({

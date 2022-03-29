@@ -1,4 +1,4 @@
-let Recipe = require("../models/recipe.model");
+let Obra = require("../models/obra.model");
 
 const transformSort = (sort) => {
   const result = {};
@@ -9,20 +9,23 @@ const transformSort = (sort) => {
   return result;
 };
 
-exports.findAll = async function (sort, skip, limit) {
+exports.findAll = async function () {
   try {
-    const transformedSort = transformSort(sort);
-    return await Recipe.find().sort(transformedSort).skip(skip).limit(limit);
+    // const transformedSort = transformSort(sort);
+    const obras = await Obra.find();
+    console.log(obras);
+    return await Obra.find()
+    // .sort(transformedSort).skip(skip).limit(limit);
   } catch (e) {
     console.error(e);
     throw Error("Error getting objects.");
   }
 };
 
-exports.create = async function (recipeData) {
-  const recipe = new Recipe(recipeData);
-  await recipe.save();
-  return recipe;
+exports.create = async function (obraData) {
+  const file = new Obra(obraData);
+  await file.save();
+  return file;
 };
 
 exports.update = async function (name, update) {

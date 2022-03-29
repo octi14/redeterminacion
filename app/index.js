@@ -3,6 +3,7 @@ const cors = require("cors");
 const jwt = require("../utils/jwt");
 
 const UserRoute = require("../routes/user.route");
+const ObraRoute = require("../routes/obra.route");
 const app = express();
 
 app.use(cors());
@@ -16,5 +17,6 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/users", UserRoute);
+app.use("/obras", ObraRoute);
 
 module.exports = app;
