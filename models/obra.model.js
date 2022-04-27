@@ -28,6 +28,24 @@ const ObraSchema = new Schema(
     garantia_contrato: {
       type: Number,
     },
+    adjudicacion: {
+      type: Number,
+    },
+    contrato: {
+      type: String,
+    },
+    ordenanza: {
+      type: String,
+    },
+    decreto: {
+      type: String,
+    },
+    plazo_obra: {
+      type: String,
+    },
+    anticipo_finan: {
+      type: Number,
+    },
   },
   {
     timestamps: true,

@@ -22,15 +22,35 @@ exports.add = async function (req, res) {
 
     // TODO: validate req.body
     const {
-      name,
-      description,
-      budget,
+      expediente,
+      objeto,
+      presup_oficial,
+      adjudicado,
+      proveedor,
+      cotizacion,
+      garantia_contrato,
+      adjudicacion,
+      contrato,
+      ordenanza,
+      decreto,
+      plazo_obra,
+      anticipo_finan,
     } = req.body.obra;
 
     const obraData = {
-      name,
-      description,
-      budget,
+      expediente,
+      objeto,
+      presup_oficial,
+      adjudicado,
+      proveedor,
+      cotizacion,
+      garantia_contrato,
+      adjudicacion,
+      contrato,
+      ordenanza,
+      decreto,
+      plazo_obra,
+      anticipo_finan,
     };
 
     console.log(obraData);
