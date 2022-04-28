@@ -14,6 +14,7 @@ exports.findAll = async function (req, res) {
     });
   }
 }
+
 exports.authenticate = async function (req, res) {
   try {
     // TODO: validate req.body
