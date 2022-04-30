@@ -35,17 +35,17 @@ exports.update = async function (name, update) {
 };
 
 exports.delete = async function (name) {
-  return Recipe.deleteOne({ name: name });
+  return Obra.deleteOne({ name: name });
 };
 
 exports.getById = async function (id) {
-  return Recipe.findById(id);
+  return Obra.findById(id);
 };
 
 exports.getByName = async function (name) {
-  return Recipe.find({ name: { $regex: name } });
+  return Obra.find({ name: { $regex: name } });
 };
 
 exports.getMany = async function (ids) {
-  return Recipe.find().where("_id").in(ids);
+  return Obra.find().where("_id").in(ids);
 };

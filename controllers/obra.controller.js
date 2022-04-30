@@ -31,6 +31,7 @@ exports.add = async function (req, res) {
       garantia_contrato,
       adjudicacion,
       contrato,
+      fecha_contrato,
       ordenanza,
       decreto,
       plazo_obra,
@@ -47,6 +48,7 @@ exports.add = async function (req, res) {
       garantia_contrato,
       adjudicacion,
       contrato,
+      fecha_contrato,
       ordenanza,
       decreto,
       plazo_obra,
@@ -101,10 +103,10 @@ exports.delete = async function (req, res) {
     // TODO: validate req.params
     const { name } = req.params;
 
-    await RecipeService.delete(name);
+    await ObraService.delete(name);
 
     return res.status(200).json({
-      message: "Receta eliminada.",
+      message: "Obra eliminada.",
     });
   } catch (e) {
     return res.status(400).json({
@@ -117,9 +119,9 @@ exports.getById = async function (req, res) {
   try {
     // TODO: validate req.params
     const { id } = req.params;
-    let recipe = await RecipeService.getById(id);
+    let obra = await ObraService.getById(id);
     return res.status(200).json({
-      data: recipe,
+      data: obra,
     });
   } catch (e) {
     return res.status(400).json({
@@ -132,9 +134,9 @@ exports.getByName = async function (req, res) {
   try {
     // TODO: validate req.params
     const { name } = req.params;
-    let recipe = await RecipeService.getByName(name);
+    let obra = await ObraService.getByName(name);
     return res.status(200).json({
-      data: recipe,
+      data: obra,
     });
   } catch (e) {
     return res.status(400).json({
