@@ -25,10 +25,12 @@ exports.authenticate = async function (req, res) {
       password,
     });
 
-    return res.status(200).json({
-      message: "Authenticated",
-      data: authenticatedUser,
-    });
+    if (authenticatedUser) {
+      return res.status(200).json({
+        message: "Authenticated",
+        data: authenticatedUser,
+      });
+    }
   } catch (e) {
     return res.status(400).json({
       message: e.message,
