@@ -48,21 +48,21 @@ exports.getMany = async function (ids) {
   return Obra.find().where("_id").in(ids);
 };
 
-exports.search = async function (expediente, objeto, adjudicado) {
-  // agrego condicionalmente las queries de búsqueda
-  let query = {};
-  if (expediente) {
-    // // busca cualquier obra por el expediente
-    query.expediente = { $regex: expediente, $options: "i" };
-  }
-  if (objeto) {
-    // busca cualquier obra por el objeto
-    query.objeto = { $regex: objeto, $options: "i" };
-  }
-  if (adjudicado) {
-    // busca cualquier obra por el expediente
-    query.adjudicado = { $regex: adjudicado, $options: "i" };
-  }
-  console.log(await Obra.find(query));
-  return Obra.find(query);
-};
+// exports.search = async function (expediente, objeto, adjudicado) {
+//   // agrego condicionalmente las queries de búsqueda
+//   let query = {};
+//   if (expediente) {
+//     // // busca cualquier obra por el expediente
+//     query.expediente = { $regex: expediente, $options: "i" };
+//   }
+//   if (objeto) {
+//     // busca cualquier obra por el objeto
+//     query.objeto = { $regex: objeto, $options: "i" };
+//   }
+//   if (adjudicado) {
+//     // busca cualquier obra por el expediente
+//     query.adjudicado = { $regex: adjudicado, $options: "i" };
+//   }
+//   console.log(await Obra.find(query));
+//   return Obra.find(query);
+// };
