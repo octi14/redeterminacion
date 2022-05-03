@@ -148,6 +148,7 @@ exports.getByName = async function (req, res) {
 exports.search = async function (req, res) {
   try {
     const { expediente, objeto, adjudicado } = req.body;
+    console.log(expediente,objeto,adjudicado);
     let obras = await ObraService.search(expediente, objeto, adjudicado);
     return res.status(200).json({
       data: obras,

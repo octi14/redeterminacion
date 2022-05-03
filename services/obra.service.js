@@ -12,8 +12,6 @@ const transformSort = (sort) => {
 exports.findAll = async function () {
   try {
     // const transformedSort = transformSort(sort);
-    const obras = await Obra.find();
-    console.log(obras);
     return await Obra.find()
     // .sort(transformedSort).skip(skip).limit(limit);
   } catch (e) {
