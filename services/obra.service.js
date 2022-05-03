@@ -41,6 +41,7 @@ exports.getById = async function (id) {
 };
 
 exports.getByObjeto = async function (objeto) {
+  console.log(objeto);
   return Obra.find({ objeto: { $regex: objeto } });
 };
 
