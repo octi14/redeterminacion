@@ -51,6 +51,7 @@ exports.getMany = async function (ids) {
 exports.search = async function (expediente, objeto, adjudicado) {
   // agrego condicionalmente las queries de búsqueda
   let query = {};
+  let result = [];
   if (expediente) {
     // // busca cualquier obra por el expediente
     // query.expediente = { $regex: expediente, $options: "i" };
@@ -65,5 +66,7 @@ exports.search = async function (expediente, objeto, adjudicado) {
     query.adjudicado = { $regex: adjudicado, $options: "i" };
   }
   console.log(query);
+  result = await Obra.find(query);
+  console.log(result);
   return Obra.find(query);
 };
