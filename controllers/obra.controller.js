@@ -130,11 +130,11 @@ exports.getById = async function (req, res) {
   }
 };
 
-exports.getByName = async function (req, res) {
+exports.getByObjeto = async function (req, res) {
   try {
     // TODO: validate req.params
-    const { name } = req.params;
-    let obra = await ObraService.getByName(name);
+    const { objeto } = req.params;
+    let obra = await ObraService.getByObjeto(objeto);
     return res.status(200).json({
       data: obra,
     });
