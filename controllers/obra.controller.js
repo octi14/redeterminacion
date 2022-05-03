@@ -144,3 +144,17 @@ exports.getByName = async function (req, res) {
     });
   }
 };
+
+exports.search = async function (req, res) {
+  try {
+    const { expediente, objeto, adjudicado } = req.body;
+    let obras = await ObraService.search(expediente, objeto, adjudicado);
+    return res.status(200).json({
+      data: obras,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
