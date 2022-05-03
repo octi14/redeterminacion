@@ -54,8 +54,7 @@ exports.search = async function (expediente, objeto, adjudicado) {
   let result = [];
   if (expediente) {
     // // busca cualquier obra por el expediente
-    // query.expediente = { $regex: expediente, $options: "i" };
-    query.expediente = expediente;
+    query.expediente = { $regex: expediente, $options: "i" };
   }
   // if (objeto) {
   //   // busca cualquier obra por el objeto
