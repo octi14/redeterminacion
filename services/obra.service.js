@@ -52,6 +52,7 @@ exports.getMany = async function (ids) {
 
 exports.search = async function (expediente, objeto, adjudicado) {
   // agrego condicionalmente las queries de búsqueda
+  console.log(expediente);
   let query = {};
   if (expediente) {
     // busca cualquier obra por el expediente
