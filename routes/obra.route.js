@@ -21,5 +21,5 @@ router.delete("/:name", ObraController.delete);
 router.get("/:id", ObraController.getById);
 router.get("/get/:name", ObraController.getByName);
 
-// router.post("/search", ObraController.getByObjeto);
+router.post("/search", ObraController.getByObjeto);
 module.exports = router;
