@@ -26,14 +26,14 @@ exports.create = async function (obraData) {
   return file;
 };
 
-exports.update = async function (name, update) {
-  return Recipe.findOneAndUpdate({ name: name }, update, {
+exports.update = async function (id, update) {
+  return Obra.findOneAndUpdate({ id: id }, update, {
     new: true,
   });
 };
 
-exports.delete = async function (name) {
-  return Obra.deleteOne({ name: name });
+exports.delete = async function (id) {
+  return Obra.deleteOne({ id: id });
 };
 
 exports.getById = async function (id) {
@@ -41,7 +41,7 @@ exports.getById = async function (id) {
 };
 
 exports.getByObjeto = async function (objeto) {
-  return Obra.find({ objeto: { $regex: objeto } });
+  return Obra.find({ objeto: objeto });
 };
 
 exports.getMany = async function (ids) {
@@ -49,20 +49,18 @@ exports.getMany = async function (ids) {
 };
 
 exports.search = async function (expediente, objeto, adjudicado) {
-  // agrego condicionalmente las queries de búsqueda
   let query = {};
-  if (expediente) {
-    // // busca cualquier obra por el expediente
-    query.expediente = { $regex: expediente, $options: "i" };
-  }
+  // if (expediente) {
+  //   // // busca cualquier obra por el expediente
+  //   query.expediente = { $regex: expediente, $options: "i" };
+  // }
   if (objeto) {
     // busca cualquier obra por el objeto
     query.objeto = { $regex: objeto, $options: "i" };
   }
-  if (adjudicado) {
-    // busca cualquier obra por el expediente
-    query.adjudicado = { $regex: adjudicado, $options: "i" };
-  }
-  console.log(await Obra.find(query));
+  // if (adjudicado) {
+  //   // busca cualquier obra por el expediente
+  //   query.adjudicado = { $regex: adjudicado, $options: "i" };
+  // }
   return Obra.find(query);
 };

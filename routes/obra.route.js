@@ -16,8 +16,8 @@ const ObraController = require("../controllers/obra.controller");
 // "/obras" endpoints
 router.get("/", ObraController.getAll);
 router.post("/", ObraController.add);
-router.put("/:name", ObraController.update);
+router.put("/:id", ObraController.update);
 router.delete("/:name", ObraController.delete);
 router.get("/:id", ObraController.getById);
-router.post("/search", ObraController.getByObjeto);
+router.post("/search", ObraController.search);
 module.exports = router;

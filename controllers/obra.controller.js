@@ -73,23 +73,45 @@ exports.add = async function (req, res) {
 exports.update = async function (req, res) {
   try {
     // TODO: validate req.params and req.body
-    const { name: originalName } = req.params;
-    const { name, description, ingredients, tags } = req.body;
-    //const { ingredients: newIngredients } = req.body;
+    const { id } = req.params;
+    const obra = await ObraService.getById(id);
+    const {
+      expediente,
+      objeto,
+      presup_oficial,
+      adjudicado,
+      proveedor,
+      cotizacion,
+      garantia_contrato,
+      adjudicacion,
+      contrato,
+      fecha_contrato,
+      ordenanza,
+      decreto,
+      plazo_obra,
+      anticipo_finan,
+    } = req.body.obra;
 
-    const updatedRecipe = await RecipeService.update(originalName, {
-      name: name,
-      description: description,
-      ingredients: ingredients,
-      tags: tags,
+    const updated = await ObraService.update(id, {
+      expediente: expediente,
+      objeto: objeto,
+      adjudicado: adjudicado,
+      cotizacion: cotizacion,
+      proveedor: proveedor,
+      presup_oficial: presup_oficial,
+      garantia_contrato:  garantia_contrato,
+      adjudicacion: adjudicacion,
+      contrato: contrato,
+      fecha_contrato: fecha_contrato,
+      ordenanza: ordenanza,
+      decreto: decreto,
+      plazo_obra: plazo_obra,
+      anticipo_finan: anticipo_finan,
     });
 
-    await IngredientService.create(ingredients);
-    await TagService.create(tags);
-
     return res.status(200).json({
-      message: "Receta modificada.",
-      data: updatedRecipe,
+      message: "Obra modificada.",
+      data: updated,
     });
   } catch (e) {
     return res.status(400).json({
@@ -101,9 +123,9 @@ exports.update = async function (req, res) {
 exports.delete = async function (req, res) {
   try {
     // TODO: validate req.params
-    const { name } = req.params;
+    const { id } = req.params;
 
-    await ObraService.delete(name);
+    await ObraService.delete(id);
 
     return res.status(200).json({
       message: "Obra eliminada.",
