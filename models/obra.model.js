@@ -20,9 +20,11 @@ const ObraSchema = new Schema(
     cotizacion:{
       type: Number,
     },
-    items:[
+    items: [
       {
-        type: String,
+        _id: false,
+        item: String,
+        monto: Number,
       },
     ],
     garantia_contrato: {
