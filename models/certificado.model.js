@@ -3,6 +3,10 @@ const Obra = require("./obra.model");
 
 const CertificadoSchema = new Schema(
   {
+    obra: {
+      type: Schema.Types.ObjectId,
+      ref: 'Obra',
+    },
     items: [
       {
         contratado: String,

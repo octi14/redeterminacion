@@ -19,5 +19,5 @@ router.post("/", CertificadoController.add);
 router.put("/:id", CertificadoController.update);
 router.delete("/:name", CertificadoController.delete);
 router.get("/:id", CertificadoController.getById);
-// router.post("/search", ObraController.search);
+router.post("/search", CertificadoController.search);
 module.exports = router;

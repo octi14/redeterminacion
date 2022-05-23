@@ -57,8 +57,7 @@ exports.add = async function (req, res) {
       anticipo_finan,
     };
 
-    console.log(obraData);
-
+    console.log(obraData.fecha_contrato);
     const createdFile = await ObraService.create(obraData);
 
     return res.status(201).json({

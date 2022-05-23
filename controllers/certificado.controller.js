@@ -23,18 +23,12 @@ exports.add = async function (req, res) {
     // TODO: validate req.body
     const {
       obra,
-      fecha,
-      factura,
-      op,
-      fecha_cancelacion,
+      items,
     } = req.body.certificado;
 
     const certificadoData = {
       obra,
-      fecha,
-      factura,
-      op,
-      fecha_cancelacion,
+      items,
     };
 
     console.log(certificadoData);
@@ -134,8 +128,8 @@ exports.getByObjeto = async function (req, res) {
 
 exports.search = async function (req, res) {
   try {
-    const { expediente, objeto, adjudicado } = req.body;
-    let certificados = await CertificadoService.search(expediente, objeto, adjudicado);
+    const { obra } = req.body;
+    let certificados = await CertificadoService.search(obra);
     return res.status(200).json({
       data: certificados,
     });

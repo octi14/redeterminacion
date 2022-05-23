@@ -48,15 +48,15 @@ exports.getMany = async function (ids) {
   return Certificado.find().where("_id").in(ids);
 };
 
-exports.search = async function (expediente, objeto, adjudicado) {
+exports.search = async function (obra) {
   let query = {};
   // if (expediente) {
   //   // // busca cualquier certificado por el expediente
   //   query.expediente = { $regex: expediente, $options: "i" };
   // }
-  if (objeto) {
+  if (obra) {
     // busca cualquier certificado por el objeto
-    query.objeto = { $regex: objeto, $options: "i" };
+    query.obra = { $regex: obra, $options: "i" };
   }
   // if (adjudicado) {
   //   // busca cualquier certificado por el expediente
