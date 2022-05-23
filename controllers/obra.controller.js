@@ -28,6 +28,7 @@ exports.add = async function (req, res) {
       adjudicado,
       proveedor,
       cotizacion,
+      items,
       garantia_contrato,
       adjudicacion,
       contrato,
@@ -45,6 +46,7 @@ exports.add = async function (req, res) {
       adjudicado,
       proveedor,
       cotizacion,
+      items,
       garantia_contrato,
       adjudicacion,
       contrato,
@@ -84,6 +86,8 @@ exports.update = async function (req, res) {
       cotizacion,
       garantia_contrato,
       adjudicacion,
+      items,
+      certificados,
       contrato,
       fecha_contrato,
       ordenanza,
@@ -91,6 +95,7 @@ exports.update = async function (req, res) {
       plazo_obra,
       anticipo_finan,
     } = req.body.obra;
+    console.log(req.body.obra);
 
     const updated = await ObraService.update(id, {
       expediente: expediente,
@@ -101,6 +106,8 @@ exports.update = async function (req, res) {
       presup_oficial: presup_oficial,
       garantia_contrato:  garantia_contrato,
       adjudicacion: adjudicacion,
+      items: items,
+      certificados: certificados,
       contrato: contrato,
       fecha_contrato: fecha_contrato,
       ordenanza: ordenanza,

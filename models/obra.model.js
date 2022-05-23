@@ -1,4 +1,5 @@
 const { Schema, model } = require("mongoose");
+const Certificado = require("./certificado.model");
 
 const ObraSchema = new Schema(
   {
@@ -25,6 +26,12 @@ const ObraSchema = new Schema(
         _id: false,
         item: String,
         monto: Number,
+      },
+    ],
+    certificados: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: Certificado,
       },
     ],
     garantia_contrato: {

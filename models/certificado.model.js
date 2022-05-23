@@ -3,22 +3,15 @@ const Obra = require("./obra.model");
 
 const CertificadoSchema = new Schema(
   {
-    obra: {
-      type: Schema.Types.ObjectId,
-      ref: Obra,
-    },
-    fecha: {
-      type: Date,
-    },
-    factura: {
-      type: String,
-    },
-    op: {
-      type: Number,
-    },
-    fecha_cancelacion:{
-      type: Date,
-    },
+    items: [
+      {
+        contratado: String,
+        anticipo: Number,
+        item: String,
+        avance: Number,
+        saldo: Number,
+      },
+    ],
   },
   {
     timestamps: true,
