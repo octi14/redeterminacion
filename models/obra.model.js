@@ -1,5 +1,6 @@
 const { Schema, model } = require("mongoose");
 const Certificado = require("./certificado.model");
+const Categoria = require("./categoria.model")
 
 const ObraSchema = new Schema(
   {
@@ -58,6 +59,15 @@ const ObraSchema = new Schema(
     anticipo_finan: {
       type: Number,
     },
+    ponderacion: [
+      {
+        categoria: {
+          type: Schema.Types.ObjectId,
+          ref: Categoria,
+        },
+        porcentaje: Number,
+      }
+    ]
   },
   {
     timestamps: true,

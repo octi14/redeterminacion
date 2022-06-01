@@ -1,4 +1,4 @@
-let Certificado = require("../models/certificado.model");
+let Categoria = require("../models/categoria.model");
 
 const transformSort = (sort) => {
   const result = {};
@@ -12,7 +12,7 @@ const transformSort = (sort) => {
 exports.findAll = async function () {
   try {
     // const transformedSort = transformSort(sort);
-    return await Certificado.find()
+    return await Categoria.find()
     // .sort(transformedSort).skip(skip).limit(limit);
   } catch (e) {
     console.error(e);
@@ -21,7 +21,7 @@ exports.findAll = async function () {
 };
 
 exports.create = async function (certificadoData) {
-  const file = new Certificado(certificadoData);
+  const file = new Categoria(certificadoData);
   await file.save();
   return file;
 };
@@ -42,10 +42,6 @@ exports.getById = async function (id) {
 
 exports.getByObjeto = async function (objeto) {
   return Certificado.find({ objeto: objeto });
-};
-
-exports.getByObra = async function (obra) {
-  return Certificado.find({ obra: obra });
 };
 
 exports.getMany = async function (ids) {

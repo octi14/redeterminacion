@@ -1,13 +1,13 @@
-let CertificadoService = require("../services/certificado.service");
+let CategoriaService = require("../services/categoria.service");
 
 exports.getAll = async function (req, res) {
   try {
     // const { sort, skip, limit } = req.pagination;
-    let certificados = await CertificadoService.findAll(
+    let categorias = await CategoriaService.findAll(
       // sort, skip, limit
       );
     return res.status(200).json({
-      data: certificados,
+      data: categorias,
     });
   } catch (e) {
     return res.status(400).json({
@@ -18,22 +18,20 @@ exports.getAll = async function (req, res) {
 
 exports.add = async function (req, res) {
   try {
-    const { sub: user } = req.user;
+    // const { sub: user } = req.user;
 
     // TODO: validate req.body
     const {
-      obra,
-      items,
-    } = req.body.certificado;
+      nombre,
+    } = req.body;
 
-    const certificadoData = {
-      obra,
-      items,
+    const categoriaData = {
+      nombre,
     };
 
-    console.log(certificadoData);
+    console.log(categoriaData);
 
-    const createdFile = await CertificadoService.create(certificadoData);
+    const createdFile = await CategoriaService.create(categoriaData);
 
     return res.status(201).json({
       message: "Created",
@@ -129,8 +127,7 @@ exports.getByObjeto = async function (req, res) {
 exports.search = async function (req, res) {
   try {
     const { obra } = req.body;
-    console.log(obra);
-    let certificados = await CertificadoService.getByObra(obra);
+    let certificados = await CertificadoService.search(obra);
     return res.status(200).json({
       data: certificados,
     });

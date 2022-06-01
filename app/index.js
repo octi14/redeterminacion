@@ -5,6 +5,7 @@ const jwt = require("../utils/jwt");
 const UserRoute = require("../routes/user.route");
 const ObraRoute = require("../routes/obra.route");
 const CertificadoRoute = require("../routes/certificado.route");
+const CategoriaRoute = require("../routes/categoria.route");
 const app = express();
 
 app.use(cors());
@@ -20,5 +21,6 @@ app.get("/", (_req, res) => {
 app.use("/users", UserRoute);
 app.use("/obras", ObraRoute);
 app.use("/certificados", CertificadoRoute);
+app.use("/categorias", CategoriaRoute);
 
 module.exports = app;
