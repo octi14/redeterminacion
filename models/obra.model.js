@@ -47,6 +47,9 @@ const ObraSchema = new Schema(
     fecha_contrato: {
       type: Date,
     },
+    acta_inicio: {
+      type: Date,
+    },
     ordenanza: {
       type: String,
     },
