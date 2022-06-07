@@ -61,7 +61,6 @@ exports.add = async function (req, res) {
       ponderacion,
     };
 
-    console.log(obraData.ponderacion);
     const createdFile = await ObraService.create(obraData);
 
     return res.status(201).json({
