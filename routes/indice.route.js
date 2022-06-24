@@ -11,5 +11,5 @@ router.put("/:name", IndiceController.update);
 router.delete("/:name", IndiceController.delete);
 router.get("/:name", IndiceController.getByName);
 router.post("/search", IndiceController.search);
-
+router.post("/searchSingle", IndiceController.searchSingle);
 module.exports = router;

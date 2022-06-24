@@ -15,8 +15,22 @@ exports.getIndices = async function (req, res) {
 
 exports.search = async function (req, res) {
   try{
-    const { mes, año } = req.body;
-    const found = await IndiceService.search(mes,año);
+    const { mes, año, categoria } = req.body;
+    const found = await IndiceService.search(mes,año, categoria);
+    return res.status(200).json({
+      data: found,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+}
+
+exports.searchSingle = async function (req, res) {
+  try{
+    const { mes, año, categoria } = req.body;
+    const found = await IndiceService.searchSingle(mes,año, categoria);
     return res.status(200).json({
       data: found,
     });

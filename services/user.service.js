@@ -25,7 +25,7 @@ exports.authenticate = async function ({ username, password }) {
   }
 };
 
-exports.create = async function ({ username, password }) {
+exports.create = async function ({ username, password, admin }) {
   // validate
   if (await User.findOne({ username })) {
     throw "El usuario [" + username + "] ya existe";
@@ -37,6 +37,7 @@ exports.create = async function ({ username, password }) {
   const user = await User.create({
     username,
     password: bcrypt.hashSync(password),
+    admin,
   });
 
   // borro la contraseña para no devolverla en la respuesta

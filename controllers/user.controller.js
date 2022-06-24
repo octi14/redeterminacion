@@ -41,11 +41,12 @@ exports.authenticate = async function (req, res) {
 exports.register = async function (req, res) {
   try {
     // TODO: validate req.body
-    const { username, password } = req.body;
+    const { username, password, admin } = req.body;
 
     const createdUser = await UserService.create({
       username,
       password,
+      admin,
     });
 
 
