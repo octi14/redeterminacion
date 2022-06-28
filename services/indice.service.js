@@ -15,15 +15,17 @@ exports.create = async function (indiceData) {
   return file;
 };
 
-exports.search = async function (mes, año, categoria) {
+exports.search = async function (mes, año) {
   let query = {};
     query.mes = { $regex: mes, $options: "i" };
     query.año = { $regex: año, $options: "i" };
-    if(categoria != null){
-      query.categoria = categoria
-    }
-
-  return Indice.find({query});
+    // if(categoria != null){
+    //   query.categoria = categoria
+    // }
+  return Indice.find({
+    mes: mes,
+    año: año,
+  });
 };
 
 exports.searchSingle = async function (mes, año, categoria) {
