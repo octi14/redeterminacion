@@ -112,7 +112,6 @@ exports.getByObjeto = async function (req, res) {
   try {
     // TODO: validate req.params
     const { objeto } = req.params;
-    console.log(objeto);
     let certificado = await CertificadoService.getByObjeto(objeto);
     return res.status(200).json({
       data: certificado,

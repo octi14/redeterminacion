@@ -78,7 +78,7 @@ exports.update = async function (req, res) {
   try {
     // TODO: validate req.params and req.body
     const { id } = req.params;
-    const obra = await ObraService.getById(id);
+    // const obra = await ObraService.getById(id);
     const {
       expediente,
       objeto,
@@ -89,7 +89,6 @@ exports.update = async function (req, res) {
       garantia_contrato,
       adjudicacion,
       items,
-      certificados,
       contrato,
       fecha_contrato,
       acta_inicio,
@@ -98,7 +97,6 @@ exports.update = async function (req, res) {
       plazo_obra,
       anticipo_finan,
     } = req.body.obra;
-    console.log(req.body.obra);
 
     const updated = await ObraService.update(id, {
       expediente: expediente,
@@ -110,7 +108,6 @@ exports.update = async function (req, res) {
       garantia_contrato:  garantia_contrato,
       adjudicacion: adjudicacion,
       items: items,
-      certificados: certificados,
       contrato: contrato,
       fecha_contrato: fecha_contrato,
       acta_inicio: acta_inicio,
@@ -167,7 +164,6 @@ exports.getByObjeto = async function (req, res) {
   try {
     // TODO: validate req.params
     const { objeto } = req.params;
-    console.log(objeto);
     let obra = await ObraService.getByObjeto(objeto);
     return res.status(200).json({
       data: obra,

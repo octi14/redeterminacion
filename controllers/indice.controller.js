@@ -17,7 +17,6 @@ exports.search = async function (req, res) {
   try{
     const { mes, año } = req.body;
     const found = await IndiceService.search(mes,año);
-    console.log(found);
     return res.status(200).json({
       data: found,
     });
@@ -30,7 +29,6 @@ exports.search = async function (req, res) {
 
 exports.searchSingle = async function (req, res) {
   try{
-    console.log("asdasd");
     const { mes, año, categoria } = req.body;
     const found = await IndiceService.searchSingle(mes,año, categoria);
     return res.status(200).json({

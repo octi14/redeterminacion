@@ -35,7 +35,6 @@ exports.searchSingle = async function (mes, año, categoria) {
   //   if(categoria != null){
   //     query.categoria = categoria
   //   }
-  //   console.log(query);
   return Indice.findOne({
     mes: mes,
     año: año,

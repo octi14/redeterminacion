@@ -39,7 +39,7 @@ const ObraSchema = new Schema(
       type: Number,
     },
     adjudicacion: {
-      type: Number,
+      type: String,
     },
     contrato: {
       type: String,

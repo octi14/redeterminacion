@@ -27,7 +27,7 @@ exports.create = async function (obraData) {
 };
 
 exports.update = async function (id, update) {
-  return Obra.findOneAndUpdate({ id: id }, update, {
+  return Obra.findOneAndUpdate({ _id: id }, update, {
     new: true,
   });
 };
