@@ -33,7 +33,8 @@ exports.update = async function (id, update) {
 };
 
 exports.delete = async function (id) {
-  return Obra.deleteOne({ id: id });
+  console.log(id);
+  return Obra.deleteOne({ _id: id });
 };
 
 exports.getById = async function (id) {

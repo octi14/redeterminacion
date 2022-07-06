@@ -1,4 +1,4 @@
-let Certificado = require("../models/certificado.model");
+let Redeterminacion = require("../models/redeterminacion.model");
 
 const transformSort = (sort) => {
   const result = {};
@@ -12,7 +12,7 @@ const transformSort = (sort) => {
 exports.findAll = async function () {
   try {
     // const transformedSort = transformSort(sort);
-    return await Certificado.find()
+    return await Redeterminacion.find()
     // .sort(transformedSort).skip(skip).limit(limit);
   } catch (e) {
     console.error(e);
@@ -20,51 +20,51 @@ exports.findAll = async function () {
   }
 };
 
-exports.create = async function (certificadoData) {
-  const file = new Certificado(certificadoData);
+exports.create = async function (redeterminacionData) {
+  const file = new Redeterminacion(redeterminacionData);
   await file.save();
   return file;
 };
 
 exports.update = async function (id, update) {
-  return Certificado.findOneAndUpdate({ _id: id }, update, {
+  return Redeterminacion.findOneAndUpdate({ id: id }, update, {
     new: true,
   });
 };
 
 exports.delete = async function (id) {
-  return Certificado.deleteOne({ id: id });
+  return Redeterminacion.deleteOne({ id: id });
 };
 
 exports.getById = async function (id) {
-  return Certificado.findById(id);
+  return Redeterminacion.findById(id);
 };
 
 exports.getByObjeto = async function (objeto) {
-  return Certificado.find({ objeto: objeto });
+  return Redeterminacion.find({ objeto: objeto });
 };
 
 exports.getByObra = async function (obra) {
-  return Certificado.find({ obra: obra });
+  return Redeterminacion.find({ obra: obra });
 };
 
 exports.getMany = async function (ids) {
-  return Certificado.find().where("_id").in(ids);
+  return Redeterminacion.find().where("_id").in(ids);
 };
 
 exports.search = async function (obra) {
   let query = {};
   // if (expediente) {
-  //   // // busca cualquier certificado por el expediente
+  //   // // busca cualquier Redeterminacion por el expediente
   //   query.expediente = { $regex: expediente, $options: "i" };
   // }
   if (obra) {
-    // busca cualquier certificado por el objeto
+    // busca cualquier Redeterminacion por el objeto
     query.obra = { $regex: obra, $options: "i" };
   }
   // if (adjudicado) {
-  //   // busca cualquier certificado por el expediente
+  //   // busca cualquier Redeterminacion por el expediente
   //   query.adjudicado = { $regex: adjudicado, $options: "i" };
   // }
-  return Certificado.find(query);
+  return Redeterminacion.find(query);
 };

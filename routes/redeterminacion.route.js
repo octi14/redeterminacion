@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 // const paginationMiddleware = require("express-pagination-middleware");
 
-const ObraController = require("../controllers/obra.controller");
+const RedeterminacionController = require("../controllers/redeterminacion.controller");
 // const {
 //   userValidationMiddleware: UserValidator,
 // } = require("../validators/middleware");
@@ -14,10 +14,10 @@ const ObraController = require("../controllers/obra.controller");
 // });
 
 // "/obras" endpoints
-router.get("/", ObraController.getAll);
-router.post("/", ObraController.add);
-router.put("/:id", ObraController.update);
-router.delete("/:id", ObraController.delete);
-router.get("/:id", ObraController.getById);
-router.post("/search", ObraController.search);
+router.get("/", RedeterminacionController.getAll);
+router.post("/", RedeterminacionController.add);
+router.put("/:id", RedeterminacionController.update);
+router.delete("/:name", RedeterminacionController.delete);
+router.get("/:id", RedeterminacionController.getById);
+router.post("/search", RedeterminacionController.search);
 module.exports = router;

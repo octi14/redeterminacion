@@ -16,6 +16,9 @@ const CertificadoSchema = new Schema(
         saldo: Number,
       },
     ],
+    redeterminado: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
