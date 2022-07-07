@@ -37,7 +37,6 @@ exports.add = async function (req, res) {
     const createdFile = await RedeterminacionService.create(redeterminacionData);
 
     const fecha = Date.now();
-    console.log(redeterminacionData.certificado, certificado);
     await CertificadoService.update(redeterminacionData.certificado, {
       redeterminado: fecha,
     })
@@ -128,8 +127,8 @@ exports.getByObjeto = async function (req, res) {
 
 exports.search = async function (req, res) {
   try {
-    const { obra } = req.body;
-    let redeterminacions = await RedeterminacionService.getByObra(obra);
+    const { obra, certificado } = req.body;
+    let redeterminacions = await RedeterminacionService.search(obra, certificado);
     return res.status(200).json({
       data: redeterminacions,
     });

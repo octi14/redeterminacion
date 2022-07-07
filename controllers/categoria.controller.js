@@ -29,7 +29,7 @@ exports.add = async function (req, res) {
       nombre,
     };
 
-    console.log(categoriaData);
+
 
     const createdFile = await CategoriaService.create(categoriaData);
 

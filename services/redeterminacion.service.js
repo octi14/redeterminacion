@@ -52,7 +52,7 @@ exports.getMany = async function (ids) {
   return Redeterminacion.find().where("_id").in(ids);
 };
 
-exports.search = async function (obra) {
+exports.search = async function (obra, certificado) {
   let query = {};
   // if (expediente) {
   //   // // busca cualquier Redeterminacion por el expediente
@@ -60,11 +60,17 @@ exports.search = async function (obra) {
   // }
   if (obra) {
     // busca cualquier Redeterminacion por el objeto
-    query.obra = { $regex: obra, $options: "i" };
+    query.obra = obra._id;
+  }
+  if(certificado) {
+    query.certificado = certificado._id;
   }
   // if (adjudicado) {
   //   // busca cualquier Redeterminacion por el expediente
   //   query.adjudicado = { $regex: adjudicado, $options: "i" };
   // }
-  return Redeterminacion.find(query);
+  return Redeterminacion.find({
+    obra: obra.id,
+    certificado: certificado.id,
+  });
 };
