@@ -138,3 +138,17 @@ exports.search = async function (req, res) {
     });
   }
 };
+
+exports.searchByObra = async function (req, res) {
+  try {
+    const { obra } = req.body;
+    let redeterminacions = await RedeterminacionService.getByObra(obra);
+    return res.status(200).json({
+      data: redeterminacions,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};

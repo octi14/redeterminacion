@@ -20,4 +20,5 @@ router.put("/:id", RedeterminacionController.update);
 router.delete("/:name", RedeterminacionController.delete);
 router.get("/:id", RedeterminacionController.getById);
 router.post("/search", RedeterminacionController.search);
+router.post("/searchByObra", RedeterminacionController.searchByObra);
 module.exports = router;
