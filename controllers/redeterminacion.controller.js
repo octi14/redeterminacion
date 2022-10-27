@@ -81,7 +81,13 @@ exports.update = async function (req, res) {
 exports.delete = async function (req, res) {
   try {
     // TODO: validate req.params
-    const { id } = req.params;
+    const id = req.params.name;
+    const redeterminacion = await RedeterminacionService.getById(id);
+    const certificado = await CertificadoService.getById(redeterminacion.certificado);
+
+    await CertificadoService.update(certificado, {
+      redeterminado: null,
+    })
 
     await RedeterminacionService.delete(id);
 

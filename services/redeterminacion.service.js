@@ -33,7 +33,7 @@ exports.update = async function (id, update) {
 };
 
 exports.delete = async function (id) {
-  return Redeterminacion.deleteOne({ id: id });
+  return Redeterminacion.deleteOne({ _id: id });
 };
 
 exports.getById = async function (id) {

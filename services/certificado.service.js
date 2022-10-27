@@ -33,7 +33,7 @@ exports.update = async function (id, update) {
 };
 
 exports.delete = async function (id) {
-  return Certificado.deleteOne({ id: id });
+  return Certificado.deleteOne({ _id: id });
 };
 
 exports.getById = async function (id) {

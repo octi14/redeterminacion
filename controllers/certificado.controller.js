@@ -79,12 +79,13 @@ exports.update = async function (req, res) {
 exports.delete = async function (req, res) {
   try {
     // TODO: validate req.params
-    const { id } = req.params;
+    const id  = req.params.name;
+    // const { sub: user } = req.user;
 
     await CertificadoService.delete(id);
 
     return res.status(200).json({
-      message: "Certificado eliminada.",
+      message: "Certificado eliminado.",
     });
   } catch (e) {
     return res.status(400).json({
