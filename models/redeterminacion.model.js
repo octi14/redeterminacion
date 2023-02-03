@@ -20,6 +20,7 @@ const RedeterminacionSchema = new Schema(
         generales: Number,
         manoObra: Number,
         equipos: Number,
+        uvi: Number,
       },
     ],
   },
