@@ -16,11 +16,12 @@ exports.getMultimedias = async function (req, res) {
 exports.add = async function (req, res) {
   try {
     // TODO: validate req.body
-    const { name, link } = req.body;
+    const { nombre, link } = req.body.multimedia;
 
     const multimediaData = {
-      name, link
+      nombre, link
     }
+    console.log(multimediaData);
 
     const createdMultimedia = await MultimediaService.create(multimediaData);
     return res.status(201).json({
