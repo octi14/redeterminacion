@@ -8,6 +8,7 @@ const CertificadoRoute = require("../routes/certificado.route");
 const CategoriaRoute = require("../routes/categoria.route");
 const IndiceRoute = require("../routes/indice.route");
 const RedeterminacionRoute = require("../routes/redeterminacion.route");
+const MultimediaRoute = require("../routes/multimedia.route");
 const app = express();
 
 app.use(cors());
@@ -26,5 +27,6 @@ app.use("/certificados", CertificadoRoute);
 app.use("/categorias", CategoriaRoute);
 app.use("/indices", IndiceRoute);
 app.use("/redeterminaciones", RedeterminacionRoute);
+app.use("/multimedias", MultimediaRoute);
 
 module.exports = app;
