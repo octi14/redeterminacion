@@ -10,8 +10,9 @@ exports.findAll = async function () {
 };
 
 exports.create = async function (multimediaData) {
-  await Multimedia.ensureIndexes();
-  return await Multimedia.create(multimediaData);
+  const file = new Multimedia(multimediaData);
+  await file.save();
+  return file;
 };
 
 exports.update = async function (name, update) {
