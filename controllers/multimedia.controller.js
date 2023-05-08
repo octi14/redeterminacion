@@ -18,7 +18,11 @@ exports.add = async function (req, res) {
     // TODO: validate req.body
     const { name, link } = req.body;
 
-    const createdMultimedia = await MultimediaService.create({ name, link });
+    const multimediaData = {
+      name, link
+    },
+
+    const createdMultimedia = await MultimediaService.create(multimediaData);
     return res.status(201).json({
       message: "Created",
       data: createdMultimedia,

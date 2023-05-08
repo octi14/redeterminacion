@@ -9,9 +9,9 @@ exports.findAll = async function () {
   }
 };
 
-exports.create = async function ({ name, link }) {
+exports.create = async function (multimediaData) {
   await Multimedia.ensureIndexes();
-  return await Multimedia.create({ name, link });
+  return await Multimedia.create(multimediaData);
 };
 
 exports.update = async function (name, update) {
