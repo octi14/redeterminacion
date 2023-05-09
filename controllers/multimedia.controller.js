@@ -16,10 +16,10 @@ exports.getMultimedias = async function (req, res) {
 exports.add = async function (req, res) {
   try {
     // TODO: validate req.body
-    const { nombre, link } = req.body.multimedia;
+    const { nombre, link, categoria } = req.body.multimedia;
 
     const multimediaData = {
-      nombre, link
+      nombre, link, categoria,
     }
     console.log(multimediaData);
 
