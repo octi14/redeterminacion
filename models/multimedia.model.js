@@ -8,6 +8,10 @@ const MultimediaSchema = new Schema(
     link: {
       type: String,
     },
+    categoria: {
+      type: Schema.Types.ObjectId,
+      ref: 'MultimediaCategoria',
+    }
   },
   {
     timestamps: true,
