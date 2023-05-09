@@ -3,7 +3,7 @@ let MultimediaCategoriaService = require("../services/multimediacategoria.servic
 exports.getAll = async function (req, res) {
   try {
     // const { sort, skip, limit } = req.pagination;
-    let multimediacategorias = await MultimediaCategoriaService.findAll(
+    let multimediaCategorias = await MultimediaCategoriaService.findAll(
       // sort, skip, limit
       );
     return res.status(200).json({
