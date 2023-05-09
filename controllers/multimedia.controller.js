@@ -73,8 +73,17 @@ exports.delete = async function (req, res) {
   }
 };
 
-exports.getByName = async function (req, res, next) {
-  MultimediaService.getByName(req.params.name, req.body)
-    .then((multimedias) => res.json(multimedias))
-    .catch((err) => next(err));
+exports.getByCategoria = async function (req, res) {
+  try {
+    // TODO: validate req.params
+    const { categoria } = req.body;
+    let multimedia = await MultimediaService.getByCategoria(categoria);
+    return res.status(200).json({
+      data: multimedia,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
 };

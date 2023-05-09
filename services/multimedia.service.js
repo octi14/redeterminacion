@@ -26,10 +26,8 @@ exports.delete = async function (name) {
   return Multimedia.deleteOne({ name: name });
 };
 
-exports.getByName = async function (name) {
-  return Multimedia.find({
-    name: name,
-  });
+exports.getByCategoria = async function (categoria) {
+  return Multimedia.find({ categoria: categoria });
 };
 
 exports.getOrCreate = async function (name) {

@@ -9,6 +9,6 @@ router.get("/", MultimediaController.getMultimedias);
 router.post("/", MultimediaController.add);
 // router.put("/:name", MultimediaController.update);
 router.delete("/:name", MultimediaController.delete);
-// router.get("/:name", MultimediaController.getByName);
+router.post("/search", MultimediaController.getByCategoria);
 
 module.exports = router;
