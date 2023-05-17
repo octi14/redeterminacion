@@ -59,16 +59,16 @@ exports.update = async function (req, res) {
 exports.delete = async function (req, res) {
   try {
     // TODO: validate req.params and req.body
-    const { name } = req.params;
+    const { id } = req.params;
 
-    MultimediaService.delete(name);
+    MultimediaService.delete(id);
 
     return res.status(200).json({
       message: "Multimedia eliminado",
     });
   } catch (e) {
     return res.status(400).json({
-      message: e.message,
+      message: "No se pudo eliminar",
     });
   }
 };

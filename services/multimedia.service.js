@@ -22,8 +22,8 @@ exports.update = async function (name, update) {
   });
 };
 
-exports.delete = async function (name) {
-  return Multimedia.deleteOne({ name: name });
+exports.delete = async function (id) {
+  return Multimedia.deleteOne({ _id: id });
 };
 
 exports.getByCategoria = async function (categoria) {
