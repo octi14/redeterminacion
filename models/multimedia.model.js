@@ -9,8 +9,7 @@ const MultimediaSchema = new Schema(
       type: String,
     },
     categoria: {
-      type: Schema.Types.ObjectId,
-      ref: 'MultimediaCategoria',
+      type: String,
     }
   },
   {

@@ -26,7 +26,6 @@ app.use("/users", UserRoute);
 app.use("/obras", ObraRoute);
 app.use("/certificados", CertificadoRoute);
 app.use("/categorias", CategoriaRoute);
-app.use("/multimediacategorias", MultimediaCategoriaRoute);
 app.use("/indices", IndiceRoute);
 app.use("/redeterminaciones", RedeterminacionRoute);
 app.use("/multimedias", MultimediaRoute);
