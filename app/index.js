@@ -6,7 +6,6 @@ const UserRoute = require("../routes/user.route");
 const ObraRoute = require("../routes/obra.route");
 const CertificadoRoute = require("../routes/certificado.route");
 const CategoriaRoute = require("../routes/categoria.route");
-const MultimediaCategoriaRoute = require("../routes/multimediacategoria.route");
 const IndiceRoute = require("../routes/indice.route");
 const RedeterminacionRoute = require("../routes/redeterminacion.route");
 const MultimediaRoute = require("../routes/multimedia.route");
