@@ -7,7 +7,8 @@ const MultimediaController = require("../controllers/multimedia.controller");
 // "/multimedias" endpoints
 router.get("/", MultimediaController.getMultimedias);
 router.post("/", MultimediaController.add);
-// router.put("/:name", MultimediaController.update);
+router.get("/:id", MultimediaController.getById);
+router.put("/:name", MultimediaController.update);
 router.delete("/:id", MultimediaController.delete);
 router.post("/search", MultimediaController.getByCategoria);
 

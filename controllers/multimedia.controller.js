@@ -38,16 +38,38 @@ exports.add = async function (req, res) {
 exports.update = async function (req, res) {
   try {
     // TODO: validate req.params and req.body
-    const { name: oldName } = req.params;
-    const { name: newName } = req.body;
+    const { id } = req.params;
+    // const obra = await ObraService.getById(id);
+    const {
+      nombre,
+      link,
+      categoria,
+    } = req.body.multimedia;
 
-    const updatedMultimedia = await MultimediaService.update(oldName, {
-      name: newName,
+    const updated = await MultimediaService.update(id, {
+      nombre: nombre,
+      link: link,
+      categoria: categoria,
     });
 
     return res.status(200).json({
-      message: "Multimedia modificado",
-      data: updatedMultimedia,
+      message: "Obra modificada.",
+      data: updated,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
+
+exports.getById = async function (req, res) {
+  try {
+    // TODO: validate req.params
+    const { id } = req.params;
+    let multimedia = await MultimediaService.getById(id);
+    return res.status(200).json({
+      data: multimedia,
     });
   } catch (e) {
     return res.status(400).json({

@@ -15,11 +15,14 @@ exports.create = async function (multimediaData) {
   return file;
 };
 
-exports.update = async function (name, update) {
-  await Multimedia.ensureIndexes();
-  return Multimedia.findOneAndUpdate({ name: name }, update, {
+exports.update = async function (id, update) {
+  return Obra.findOneAndUpdate({ _id: id }, update, {
     new: true,
   });
+};
+
+exports.getById = async function (id) {
+  return Multimedia.findById(id);
 };
 
 exports.delete = async function (id) {
