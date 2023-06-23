@@ -16,7 +16,7 @@ exports.create = async function (multimediaData) {
 };
 
 exports.update = async function (id, update) {
-  return Obra.findOneAndUpdate({ _id: id }, update, {
+  return Multimedia.findOneAndUpdate({ _id: id }, update, {
     new: true,
   });
 };

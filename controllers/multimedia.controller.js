@@ -39,7 +39,7 @@ exports.update = async function (req, res) {
   try {
     // TODO: validate req.params and req.body
     const { id } = req.params;
-    // const obra = await ObraService.getById(id);
+    // const multimedia = await MultimediaService.getById(id);
     const {
       nombre,
       link,
@@ -53,7 +53,7 @@ exports.update = async function (req, res) {
     });
 
     return res.status(200).json({
-      message: "Obra modificada.",
+      message: "Multimedia modificado.",
       data: updated,
     });
   } catch (e) {
