@@ -25,19 +25,22 @@ exports.add = async function (req, res) {
     // Utilizar multer para manejar los archivos PDF adjuntos
     upload.single('archivo')(req, res, async function (err) {
       if (err instanceof multer.MulterError) {
+
         // Error de multer (p. ej., tamaño máximo excedido)
+        console.log('Error de Multer:', err);
         return res.status(400).json({
           message: 'Error al cargar el archivo PDF.',
         });
       } else if (err) {
         // Otro tipo de error
+        console.log('Error:', err);
         return res.status(500).json({
           message: 'Error interno del servidor.',
         });
       }
 
       // Obtener los documentos desde req.body.documentos
-      const documentos = req.body.documentos || {};
+      const documentos = req.body.habilitacion.documentos || {};
       // Obtener otros datos de habilitación desde req.body.habilitacion
       const formData = req.body.habilitacion;
 
@@ -48,7 +51,7 @@ exports.add = async function (req, res) {
       const agregarDocumento = (nombreCampo, archivo) => {
         if (archivo) {
           documentosParaGuardar[nombreCampo] = {
-            data: Buffer.from(archivo.split(',')[1], 'base64'),
+            data: Buffer.from(archivo.data, 'base64'),
             contentType: 'application/pdf',
           };
         }
@@ -60,12 +63,12 @@ exports.add = async function (req, res) {
       agregarDocumento('dniDorso', documentos.dniDorso);
       agregarDocumento('constanciaCuit', documentos.constanciaCuit);
       agregarDocumento('constanciaIngresosBrutos', documentos.constanciaIngresosBrutos);
+      agregarDocumento('certificadoDomicilio', documentos.certificadoDomicilio);
       agregarDocumento('actaPersonaJuridica', documentos.actaPersonaJuridica);
       agregarDocumento('actaDirectorio', documentos.actaDirectorio);
       agregarDocumento('libreDeudaUrbana', documentos.libreDeudaUrbana);
       agregarDocumento('tituloPropiedad', documentos.tituloPropiedad);
       agregarDocumento('plano', documentos.plano);
-      // Agregar más campos para los documentos aquí según los creados en el schema de documentos
 
       // Agregar los documentos al formData
       formData.documentos = documentosParaGuardar;

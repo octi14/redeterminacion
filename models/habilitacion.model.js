@@ -10,7 +10,8 @@ const documentoSchema = new Schema({
   actaDirectorio: { data: Buffer, contentType: String },
   libreDeudaUrbana: { data: Buffer, contentType: String },
   tituloPropiedad: { data: Buffer, contentType: String },
-  plano: { data: Buffer, contentType: String }
+  plano: { data: Buffer, contentType: String },
+  certificadoDomicilio: { data: Buffer, contentType: String }
 });
 
 const solicitanteSchema = new Schema({
