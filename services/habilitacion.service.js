@@ -11,17 +11,22 @@ let Habilitacion = require("../models/habilitacion.model");
 
 exports.findAll = async function () {
   try {
-    return await Habilitacion.find()
+    return await Habilitacion.find().select('-documentos');
   } catch (e) {
     console.error(e);
     throw Error("Error getting objects.");
   }
 };
 
-exports.create = async function (habilitacionData) {
-  const file = new Habilitacion(habilitacionData);
-  await file.save();
-  return file;
+exports.create = async function (formData) {
+  try {
+    const habilitacion = new Habilitacion(formData);
+    const createdHabilitacion = await habilitacion.save();
+    return createdHabilitacion;
+  } catch (e) {
+    // Manejar cualquier error que pueda ocurrir al crear la habilitación
+    throw new Error('No se pudo crear la habilitación. Detalles del error: ' + e.message);
+  }
 };
 
 exports.update = async function (id, update) {

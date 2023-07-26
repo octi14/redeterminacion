@@ -11,7 +11,8 @@ const documentoSchema = new Schema({
   libreDeudaUrbana: { data: Buffer, contentType: String },
   tituloPropiedad: { data: Buffer, contentType: String },
   plano: { data: Buffer, contentType: String },
-  certificadoDomicilio: { data: Buffer, contentType: String }
+  certificadoDomicilio: { data: Buffer, contentType: String },
+  croquis: { data: Buffer, contentType: String}
 });
 
 const solicitanteSchema = new Schema({
@@ -57,6 +58,10 @@ const habilitacionSchema = new Schema({
     type: String,
   },
   //consultar guardado de nroExpediente en caso de aprobar la solicitud
-});
+},
+{
+  timestamps: true,
+}
+);
 
 module.exports = model('Habilitacion', habilitacionSchema);

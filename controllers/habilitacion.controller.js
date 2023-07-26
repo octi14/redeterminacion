@@ -4,7 +4,11 @@ const multer = require('multer');
 
 // Configurar el storage para multer (opcional)
 const storage = multer.memoryStorage(); // Almacenar los archivos en memoria como Buffers
-const upload = multer({ storage });
+const upload = multer({
+   storage,
+   limits: {
+    fileSize: 48 * 1024 * 1024, // 5 MB
+  }, });
 
 exports.getAll = async function (req, res) {
   try {
@@ -21,7 +25,6 @@ exports.getAll = async function (req, res) {
 
 exports.add = async function (req, res) {
   try {
-    console.log(req.body);
     // Utilizar multer para manejar los archivos PDF adjuntos
     upload.single('archivo')(req, res, async function (err) {
       if (err instanceof multer.MulterError) {
@@ -52,7 +55,7 @@ exports.add = async function (req, res) {
         if (archivo) {
           documentosParaGuardar[nombreCampo] = {
             data: Buffer.from(archivo.data, 'base64'),
-            contentType: 'application/pdf',
+            contentType: archivo.contentType,
           };
         }
       };
@@ -74,11 +77,18 @@ exports.add = async function (req, res) {
       formData.documentos = documentosParaGuardar;
 
       // Crear la habilitación utilizando el servicio
-      const createdHabilitacion = await HabilitacionService.create(formData);
+      try{
+        const createdHabilitacion = await HabilitacionService.create(formData);
+      } catch(e) {
+        console.log(e.message);
+        return res.status(400).json({
+          message: e.message,
+        });
+      }
 
       return res.status(201).json({
         message: 'Created',
-        data: createdHabilitacion,
+        // data: createdHabilitacion,
       });
     });
   } catch (e) {
@@ -135,7 +145,7 @@ exports.getById = async function (req, res) {
 exports.getByTipoSolicitud = async function (req, res) {
   try {
     const { tipoSolicitud } = req.params;
-    const habilitacions = await Habilitacion.find({ 'solicitante.tipoSolicitud': tipoSolicitud });
+    const habilitacions = await Habilitacion.find({ 'solicitante.tipoSolicitud': tipoSolicitud }).select('-documentos');
     return res.status(200).json({
       data: habilitacions,
     });

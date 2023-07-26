@@ -9,6 +9,6 @@ router.get("/", HabilitacionController.getAll);
 router.post("/", HabilitacionController.add);
 router.put("/:id", HabilitacionController.update);
 // router.delete("/:id", ObraController.delete);
-// router.get("/:id", ObraController.getById);
+router.get("/:id", HabilitacionController.getById);
 // router.post("/search", ObraController.search);
 module.exports = router;

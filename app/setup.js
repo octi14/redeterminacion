@@ -8,6 +8,9 @@ beforeAll(async () => {
   const url = mongoServer.getUri();
   await mongoose.connect(url, {
     useNewUrlParser: true,
+    useUnifiedTopology: true,
+    useCreateIndex: true, // Habilitar el uso de createIndex
+    useFindAndModify: false,
   });
 });
 

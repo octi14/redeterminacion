@@ -1,5 +1,4 @@
 const express = require("express");
-const bodyParser = require('body-parser');
 const cors = require("cors");
 const jwt = require("../utils/jwt");
 
@@ -13,13 +12,15 @@ const MultimediaRoute = require("../routes/multimedia.route");
 const HabilitacionRoute = require("../routes/habilitacion.route");
 const app = express();
 
-// Configurar body-parser con un límite de 16MB (o el tamaño necesario para tus archivos PDF)
-app.use(bodyParser.json({ limit: '16mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '16mb' }));
 app.use(cors());
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+
+// Configurar express.json() con un límite de 100 MB para datos analizados
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Agregar el middleware para JWT
 app.use(jwt());
+
 app.get("/", (_req, res) => {
   res.status(200).json({
     message: "OK",
