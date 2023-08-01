@@ -19,6 +19,7 @@ const TurnoSchema = new Schema(
     },
     status: {
       type: String,
+      default: 'En revisión',
     },
     nroTramite: {
       type: Number,

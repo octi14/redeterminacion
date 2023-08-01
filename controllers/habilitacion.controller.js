@@ -78,6 +78,7 @@ exports.add = async function (req, res) {
 
       // Crear la habilitación utilizando el servicio
       try{
+        const nroTramite = 1; //Generar autoincremental
         const createdHabilitacion = await HabilitacionService.create(formData);
       } catch(e) {
         console.log(e.message);
@@ -85,6 +86,7 @@ exports.add = async function (req, res) {
           message: e.message,
         });
       }
+
 
       return res.status(201).json({
         message: 'Created',
@@ -138,6 +140,21 @@ exports.getById = async function (req, res) {
   } catch (e) {
     return res.status(400).json({
       message: e.message,
+    });
+  }
+};
+
+exports.getByNroTramite = async function (req, res) {
+  try {
+    const { nroTramite } = req.body;
+    console.log(nroTramite);
+    const habilitacion = await Habilitacion.findOne({ 'nroSolicitud': nroTramite }).select('-documentos');
+    return res.status(200).json({
+      data: habilitacion,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: "Error" + e.message,
     });
   }
 };

@@ -16,10 +16,10 @@ exports.getAll = async function (req, res) {
 exports.add = async function (req, res) {
   try {
     // TODO: validate req.body
-    const { dia, horario, nombre, dni, domicilio } = req.body.turno;
+    const { dia, horario, nombre, dni, domicilio, nroTramite } = req.body.turno;
 
     const turnoData = {
-      dia, horario, nombre, dni, domicilio
+      dia, horario, nombre, dni, domicilio, nroTramite
     }
     console.log(turnoData);
 
@@ -40,19 +40,11 @@ exports.update = async function (req, res) {
     // TODO: validate req.params and req.body
     const { id } = req.params;
     const {
-      dia,
-      horario,
-      nombre,
-      dni,
-      domicilio,
+      status,
     } = req.body.turno;
 
     const updated = await TurnoService.update(id, {
-      dia: dia,
-      horario: horario,
-      nombre: nombre,
-      dni: dni,
-      domicilio: domicilio,
+      status: status,
     });
 
     return res.status(200).json({

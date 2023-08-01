@@ -57,7 +57,9 @@ const habilitacionSchema = new Schema({
   observaciones: {
     type: String,
   },
-  //consultar guardado de nroExpediente en caso de aprobar la solicitud
+  nroSolicitud: {
+    type: Number,
+  },
 },
 {
   timestamps: true,

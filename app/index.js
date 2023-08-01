@@ -10,6 +10,7 @@ const IndiceRoute = require("../routes/indice.route");
 const RedeterminacionRoute = require("../routes/redeterminacion.route");
 const MultimediaRoute = require("../routes/multimedia.route");
 const HabilitacionRoute = require("../routes/habilitacion.route");
+const TurnoRoute = require('../routes/turno.route');
 const app = express();
 
 app.use(cors());
@@ -35,5 +36,6 @@ app.use("/indices", IndiceRoute);
 app.use("/redeterminaciones", RedeterminacionRoute);
 app.use("/multimedias", MultimediaRoute);
 app.use("/habilitaciones", HabilitacionRoute);
+app.use("/turnos", TurnoRoute);
 
 module.exports = app;

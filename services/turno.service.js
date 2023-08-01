@@ -29,10 +29,6 @@ exports.delete = async function (id) {
   return Turno.deleteOne({ _id: id });
 };
 
-exports.getByCategoria = async function (categoria) {
-  return Turno.find({ categoria: categoria });
-};
-
 exports.getOrCreate = async function (name) {
   const found = await Turno.findOne({
     name,
