@@ -73,6 +73,22 @@ exports.getById = async function (req, res) {
   }
 };
 
+exports.getByNroTramite = async function (req, res) {
+  try {
+    // TODO: validate req.params
+    const { nroTramite } = req.params;
+    let turno = await TurnoService.getByNroTramite(nroTramite);
+    console.log(turno);
+    return res.status(200).json({
+      data: turno,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
+
 exports.delete = async function (req, res) {
   try {
     // TODO: validate req.params and req.body
@@ -89,18 +105,3 @@ exports.delete = async function (req, res) {
     });
   }
 };
-
-// exports.getByCategoria = async function (req, res) {
-//   try {
-//     // TODO: validate req.params
-//     const { categoria } = req.body;
-//     let multimedia = await MultimediaService.getByCategoria(categoria);
-//     return res.status(200).json({
-//       data: multimedia,
-//     });
-//   } catch (e) {
-//     return res.status(400).json({
-//       message: e.message,
-//     });
-//   }
-// };

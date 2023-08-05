@@ -8,6 +8,7 @@ const TurnoController = require("../controllers/turno.controller");
 router.get("/", TurnoController.getAll);
 router.post("/", TurnoController.add);
 router.get("/:id", TurnoController.getById);
+router.get("/nroTramite/:nroTramite", TurnoController.getByNroTramite);
 router.put("/:id", TurnoController.update);
 router.delete("/:id", TurnoController.delete);
 

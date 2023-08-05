@@ -1,5 +1,6 @@
 const Habilitacion = require('../models/habilitacion.model');
 const HabilitacionService = require('../services/habilitacion.service');
+const TicketController = require('../controllers/ticket.controller');
 const multer = require('multer');
 
 // Configurar el storage para multer (opcional)
@@ -78,20 +79,19 @@ exports.add = async function (req, res) {
 
       // Crear la habilitación utilizando el servicio
       try{
-        const nroTramite = 1; //Generar autoincremental
+        const nroTramite = await TicketController.getCurrent(); //Generar autoincremental
+        formData.nroSolicitud = nroTramite;
         const createdHabilitacion = await HabilitacionService.create(formData);
+        return res.status(201).json({
+          message: 'Created',
+          data: nroTramite,
+        });
       } catch(e) {
         console.log(e.message);
         return res.status(400).json({
           message: e.message,
         });
       }
-
-
-      return res.status(201).json({
-        message: 'Created',
-        // data: createdHabilitacion,
-      });
     });
   } catch (e) {
     return res.status(400).json({
@@ -100,16 +100,22 @@ exports.add = async function (req, res) {
   }
 };
 
-exports.update = async function (req, res) {
+exports.update = async (req, res) => {
   try {
-    const { id } = req.params;
-    const formData = req.body;
-    const updatedHabilitacion = await Habilitacion.findByIdAndUpdate(id, formData, { new: true });
-    return res.status(200).json({
-      message: 'Habilitacion modified.',
-      data: updatedHabilitacion,
-    });
-  } catch (e) {
+    const { id } = req.params; // Suponiendo que proporcionas el ID del documento a actualizar en los parámetros de la solicitud.
+    const camposActualizados = req.body; // Suponiendo que envías los campos actualizados en el cuerpo de la solicitud.
+
+    // Encontrar el documento por ID y actualizarlo
+    const documentoActualizado = await HabilitacionService.update(
+      id,
+      camposActualizados.habilitacion
+    );
+
+    if (!documentoActualizado) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
+    }
+    return res.status(200).json(documentoActualizado);
+  } catch (error) {
     return res.status(400).json({
       message: e.message,
     });
@@ -147,8 +153,8 @@ exports.getById = async function (req, res) {
 exports.getByNroTramite = async function (req, res) {
   try {
     const { nroTramite } = req.body;
-    console.log(nroTramite);
     const habilitacion = await Habilitacion.findOne({ 'nroSolicitud': nroTramite }).select('-documentos');
+    console.log(habilitacion);
     return res.status(200).json({
       data: habilitacion,
     });

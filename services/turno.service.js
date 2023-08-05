@@ -25,6 +25,12 @@ exports.getById = async function (id) {
   return Turno.findById(id);
 };
 
+exports.getByNroTramite = async function (nroTramite) {
+  return Turno.find({
+    nroTramite: nroTramite,
+  });
+};
+
 exports.delete = async function (id) {
   return Turno.deleteOne({ _id: id });
 };
