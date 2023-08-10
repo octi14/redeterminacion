@@ -165,6 +165,20 @@ exports.getByNroTramite = async function (req, res) {
   }
 };
 
+exports.getAprobados = async function (req, res) {
+  try {
+    const { status } = req.body;
+    const habilitaciones = await Habilitacion.find({ 'status': status }).select('-documentos');
+    return res.status(200).json({
+      data: habilitaciones,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: "Error" + e.message,
+    });
+  }
+};
+
 exports.getByTipoSolicitud = async function (req, res) {
   try {
     const { tipoSolicitud } = req.params;
