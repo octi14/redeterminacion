@@ -60,6 +60,9 @@ const habilitacionSchema = new Schema({
   nroSolicitud: {
     type: Number,
   },
+  nroExpediente:{
+    type:String,
+  },
 },
 {
   timestamps: true,
