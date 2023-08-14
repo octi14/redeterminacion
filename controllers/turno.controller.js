@@ -39,13 +39,10 @@ exports.update = async function (req, res) {
   try {
     // TODO: validate req.params and req.body
     const { id } = req.params;
-    const {
-      status,
-    } = req.body.turno;
+    const camposActualizados = req.body.turno; // Suponiendo que envías los campos actualizados en el cuerpo de la solicitud.
 
-    const updated = await TurnoService.update(id, {
-      status: status,
-    });
+
+    const updated = await TurnoService.update(id, camposActualizados);
 
     return res.status(200).json({
       message: "Turno modificado.",

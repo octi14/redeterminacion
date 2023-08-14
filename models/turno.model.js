@@ -24,6 +24,9 @@ const TurnoSchema = new Schema(
     nroTramite: {
       type: Number,
     },
+    observaciones: {
+      type: String,
+    },
   },
   {
     timestamps: true,
