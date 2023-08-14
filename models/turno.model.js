@@ -26,6 +26,7 @@ const TurnoSchema = new Schema(
     },
     observaciones: {
       type: String,
+      default: '',
     },
   },
   {
