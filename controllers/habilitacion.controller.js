@@ -72,6 +72,7 @@ exports.add = async function (req, res) {
       agregarDocumento('actaDirectorio', documentos.actaDirectorio);
       agregarDocumento('libreDeudaUrbana', documentos.libreDeudaUrbana);
       agregarDocumento('tituloPropiedad', documentos.tituloPropiedad);
+      agregarDocumento('croquis', documentos.croquis);
       agregarDocumento('plano', documentos.plano);
 
       // Agregar los documentos al formData
