@@ -21,7 +21,6 @@ exports.add = async function (req, res) {
     const turnoData = {
       dia, horario, nombre, dni, domicilio, nroTramite
     }
-    console.log(turnoData);
 
     const createdTurno = await TurnoService.create(turnoData);
     return res.status(201).json({
@@ -75,7 +74,6 @@ exports.getByNroTramite = async function (req, res) {
     // TODO: validate req.params
     const { nroTramite } = req.params;
     let turno = await TurnoService.getByNroTramite(nroTramite);
-    console.log(turno);
     return res.status(200).json({
       data: turno,
     });

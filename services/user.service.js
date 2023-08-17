@@ -60,3 +60,12 @@ exports.update = async function ({ id, username }) {
     }
   );
 };
+
+exports.checkTokenValidity = async function(token) {
+  try {
+    const decodedToken = jwt.verify(token, config.TOKEN_SECRET);
+    return !decodedToken.exp || Date.now() <= decodedToken.exp * 1000;
+  } catch (error) {
+    return false;
+  }
+}

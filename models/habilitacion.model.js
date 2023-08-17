@@ -40,6 +40,7 @@ const inmuebleSchema = new Schema({
   rubro: { type: String, required: true },
   espacioPublico: { type: Boolean, default: false },
   serviciosHoteleria: [{ servicio: String, value: Boolean }],
+  otrosServicios: { type: String, },
   marquesina: { type: Boolean, default: false },
   mercaderia: { type: Boolean, default: false },
   mesas: { type: Boolean, default: false },

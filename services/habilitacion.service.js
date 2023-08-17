@@ -35,6 +35,13 @@ exports.update = async function (id, update) {
   });
 };
 
+exports.updateLazy = async function (id, update) {
+  return Habilitacion.findOneAndUpdate({ _id: id }, update, {
+    new: true,
+  }).select('-documentos');
+};
+
+
 exports.delete = async function (id) {
   return Habilitacion.deleteOne({ _id: id });
 };

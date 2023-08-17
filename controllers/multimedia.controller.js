@@ -21,7 +21,6 @@ exports.add = async function (req, res) {
     const multimediaData = {
       nombre, link, categoria,
     }
-    console.log(multimediaData);
 
     const createdMultimedia = await MultimediaService.create(multimediaData);
     return res.status(201).json({

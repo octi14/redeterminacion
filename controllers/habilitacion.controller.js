@@ -123,6 +123,28 @@ exports.update = async (req, res) => {
   }
 };
 
+exports.updateLazy = async (req, res) => {
+  try {
+    const { id } = req.params; // Suponiendo que proporcionas el ID del documento a actualizar en los parámetros de la solicitud.
+    const camposActualizados = req.body; // Suponiendo que envías los campos actualizados en el cuerpo de la solicitud.
+
+    // Encontrar el documento por ID y actualizarlo
+    const documentoActualizado = await HabilitacionService.updateLazy(
+      id,
+      camposActualizados.habilitacion
+    );
+
+    if (!documentoActualizado) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
+    }
+    return res.status(200).json(documentoActualizado);
+  } catch (error) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
+
 exports.delete = async function (req, res) {
   try {
     const { id } = req.params;
@@ -140,7 +162,23 @@ exports.delete = async function (req, res) {
 exports.getById = async function (req, res) {
   try {
     const { id } = req.params;
-    const habilitacion = await Habilitacion.findById(id);
+    const habilitacion = await Habilitacion.findById(id).select('-documentos');
+    return res.status(200).json({
+      data: habilitacion,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
+
+exports.getDocumentosById = async function (req, res) {
+  try {
+    const { id } = req.params;
+    console.log("Buscando documentos..")
+    const habilitacion = await Habilitacion.findById(id).select('documentos');
+    console.log(habilitacion);
     return res.status(200).json({
       data: habilitacion,
     });
@@ -155,7 +193,6 @@ exports.getByNroTramite = async function (req, res) {
   try {
     const { nroTramite } = req.body;
     const habilitacion = await Habilitacion.findOne({ 'nroSolicitud': nroTramite }).select('-documentos');
-    console.log(habilitacion);
     return res.status(200).json({
       data: habilitacion,
     });

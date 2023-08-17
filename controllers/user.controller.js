@@ -74,3 +74,17 @@ exports.getCurrent = async function (req, res) {
     });
   }
 };
+
+exports.checkToken = async function(req, res){
+  try{
+    const token = req.body.token;
+    let validez = await UserService.checkTokenValidity(token);
+    return res.status(200).json({
+      data: validez,
+    });
+  }catch(e){
+    return res.status(400).json({
+      meesage: e.message,
+    })
+  }
+};
