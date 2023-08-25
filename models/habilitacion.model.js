@@ -1,19 +1,22 @@
 const { Schema, model } = require('mongoose');
 
-const documentoSchema = new Schema({
-  planillaAutorizacion: { data: Buffer, contentType: String },
-  dniFrente: { data: Buffer, contentType: String },
-  dniDorso: { data: Buffer, contentType: String },
-  constanciaCuit: { data: Buffer, contentType: String },
-  constanciaIngresosBrutos: { data: Buffer, contentType: String },
-  actaPersonaJuridica: { data: Buffer, contentType: String },
-  actaDirectorio: { data: Buffer, contentType: String },
-  libreDeudaUrbana: { data: Buffer, contentType: String },
-  tituloPropiedad: { data: Buffer, contentType: String },
-  plano: { data: Buffer, contentType: String },
-  certificadoDomicilio: { data: Buffer, contentType: String },
-  croquis: { data: Buffer, contentType: String}
-});
+const documentoSchema = new Schema(
+  {
+    planillaAutorizacion: { type: Schema.Types.ObjectId },
+    dniFrente: { type: Schema.Types.ObjectId },
+    dniDorso: { type: Schema.Types.ObjectId },
+    constanciaCuit: { type: Schema.Types.ObjectId },
+    constanciaIngresosBrutos: { type: Schema.Types.ObjectId },
+    actaPersonaJuridica: { type: Schema.Types.ObjectId },
+    actaDirectorio: { type: Schema.Types.ObjectId },
+    libreDeudaUrbana: { type: Schema.Types.ObjectId },
+    tituloPropiedad: { type: Schema.Types.ObjectId },
+    plano: { type: Schema.Types.ObjectId },
+    certificadoDomicilio: { type: Schema.Types.ObjectId },
+    croquis: { type: Schema.Types.ObjectId }
+  },
+  { autoIndex: false } // Evitar que se generen índices automáticos
+);
 
 const solicitanteSchema = new Schema({
   tipoSolicitud: { type: String, required: true },
