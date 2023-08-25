@@ -219,33 +219,30 @@ exports.getDocumentosById = async (req, res) => {
       'libreDeudaUrbana', 'tituloPropiedad', 'plano', 'certificadoDomicilio', 'croquis'
     ];
 
-    await Promise.all(
-      camposPermitidos.map(async campo => {
-        const fileId = documentos[campo];
-        if (fileId && mongoose.Types.ObjectId.isValid(fileId)) {
-          const downloadStream = bucket.openDownloadStream(fileId);
-          const chunks = [];
+    // Usar un bucle for...of para asegurar sincronización
+    for (const campo of camposPermitidos) {
+      const fileId = documentos[campo];
+      if (fileId && mongoose.Types.ObjectId.isValid(fileId)) {
+        const downloadStream = bucket.openDownloadStream(fileId);
+        const chunks = [];
 
+        await new Promise((resolve, reject) => {
           downloadStream.on('data', chunk => chunks.push(chunk));
-          downloadStream.on('end', async () => {
-            const buffer = Buffer.concat(chunks);
-            const file = await bucket.find({ _id: mongoose.Types.ObjectId(fileId) }).next();
-            if (file) {
-              documentosObtenidos[campo] = {
-                contentType: file.contentType,
-                data: buffer.toString('base64'), // Codificar en base64 aquí
-                filename: file.filename,
-              };
-            }
-          });
+          downloadStream.on('error', reject);
+          downloadStream.on('end', resolve);
+        });
 
-          await new Promise((resolve, reject) => {
-            downloadStream.on('error', reject);
-            downloadStream.on('end', resolve);
-          });
+        const buffer = Buffer.concat(chunks);
+        const file = await bucket.find({ _id: mongoose.Types.ObjectId(fileId) }).next();
+        if (file) {
+          documentosObtenidos[campo] = {
+            contentType: file.contentType,
+            data: buffer.toString('base64'), // Codificar en base64 aquí
+            filename: file.filename,
+          };
         }
-      })
-    );
+      }
+    }
 
     return res.status(200).json({
       data: documentosObtenidos,
