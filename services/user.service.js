@@ -9,6 +9,10 @@ exports.getAll = async function () {
 
 exports.authenticate = async function ({ username, password }) {
   const user = await User.findOne({ username });
+  if (!user) {
+    // Usuario no encontrado, lanza una excepción personalizada
+    throw new Error("Usuario no encontrado");
+  }
   if (user && bcrypt.compareSync(password, user.password)) {
     const token = jwt.sign({ sub: user.id }, config.TOKEN_SECRET, {
       expiresIn: config.TOKEN_TIMEOUT,
@@ -22,6 +26,9 @@ exports.authenticate = async function ({ username, password }) {
       ...responseUser,
       token,
     };
+  } else {
+    // Contraseña incorrecta, lanza una excepción personalizada
+    throw new Error("Contraseña incorrecta");
   }
 };
 
