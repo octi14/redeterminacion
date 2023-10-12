@@ -168,6 +168,66 @@ exports.updateLazy = async (req, res) => {
   }
 };
 
+exports.deleteDocumentosById = async function (req, res) {
+  try {
+    const { id } = req.params; // Obtén el ID de la habilitación que deseas eliminar los documentos
+    // Busca la habilitación por su ID
+    var habilitacion = null;
+    try{
+      habilitacion = await Habilitacion.findById(new mongoose.Types.ObjectId(id)).select("documentos").exec();
+    }catch(e){
+      console.log("Algo está mal con el ID.");
+    };
+
+    if (!habilitacion) {
+      return res.status(404).json({
+        message: 'La habilitación no se encontró en la base de datos.',
+      });
+    }
+
+    const documentos = habilitacion.documentos.toObject(); // Convierte a un objeto Mongoose
+    console.log(documentos);
+
+    // Accede al bucket de GridFS
+    const bucket = new GridFSBucket(mongoose.connection.db, {
+      bucketName: 'documentos',
+    });
+
+    // Itera a través de los campos de documentos y elimina cada documento asociado a la habilitación específica
+    const promises = Object.keys(documentos).map(async (campo) => {
+      var documentoId = null;
+      if(documentos[campo] != null && campo != "_id"){
+        documentoId = documentos[campo];
+        // Utiliza el método delete para eliminar el documento por su ID
+        await bucket.delete(documentoId);
+      }
+      documentos[campo] = null;
+    });
+
+    // Espera a que todas las eliminaciones se completen antes de responder
+
+    await Promise.all(promises);
+
+    console.log(documentos);
+
+    // Puedes realizar cualquier otra lógica aquí, como actualizar la habilitación si es necesario
+
+
+    await HabilitacionService.update(id,{
+      habilitacion: {
+        documentos: documentos,
+      },
+    })
+    return res.status(200).json({
+      message: 'Documentos eliminados con éxito.',
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
+
 exports.delete = async function (req, res) {
   try {
     const { id } = req.params;
