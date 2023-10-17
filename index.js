@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const config = require("./config.js");
 const app = require("./app");
 
+mongoose.set('strictQuery', true); // Agrega esta línea
+
 mongoose.connect(
   config.MONGO_URL,
   {
