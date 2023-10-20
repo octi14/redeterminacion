@@ -335,7 +335,6 @@ exports.getAprobados = async function (req, res) {
     return res.status(200).json({
       data: habilitaciones,
     });
-    consolee.log("A");
   } catch (e) {
     return res.status(400).json({
       message: "Error" + e.message,
