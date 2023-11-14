@@ -212,7 +212,7 @@ exports.deleteDocumentosById = async function (req, res) {
 
     // Puedes realizar cualquier otra lógica aquí, como actualizar la habilitación si es necesario
 
-
+    //Esto no funciona aún, revisar la eliminación de la referencia a los documentos recién eliminados
     await HabilitacionService.update(id,{
       habilitacion: {
         documentos: documentos,
