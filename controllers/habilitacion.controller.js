@@ -199,7 +199,11 @@ exports.deleteDocumentosById = async function (req, res) {
       if(documentos[campo] != null && campo != "_id"){
         documentoId = documentos[campo];
         // Utiliza el método delete para eliminar el documento por su ID
-        await bucket.delete(documentoId);
+        try{
+          await bucket.delete(documentoId);
+        }catch(e){
+          console.log("Error tratando de borrar el documento " + documentoId);
+        }
       }
       documentos[campo] = null;
     });
@@ -210,14 +214,12 @@ exports.deleteDocumentosById = async function (req, res) {
 
     console.log(documentos);
 
-    // Puedes realizar cualquier otra lógica aquí, como actualizar la habilitación si es necesario
+    // Actualiza la referencia de documentos en la instancia de habilitacion
+    habilitacion.documentos = documentos;
 
-    //Esto no funciona aún, revisar la eliminación de la referencia a los documentos recién eliminados
-    await HabilitacionService.update(id,{
-      habilitacion: {
-        documentos: documentos,
-      },
-    })
+    // Guarda la instancia actualizada en la base de datos
+    await habilitacion.save();
+    
     return res.status(200).json({
       message: 'Documentos eliminados con éxito.',
     });
