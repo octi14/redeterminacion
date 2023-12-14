@@ -58,6 +58,27 @@ exports.getById = async function (id) {
   return User.findById(id, { password: false });
 };
 
+exports.changePassword = async function(userId, oldPassword, newPassword) {
+  try {
+    const user = await User.findById(userId);
+
+    if (!user) {
+      throw new Error('Usuario no encontrado');
+    }
+
+    if (!bcrypt.compareSync(oldPassword, user.password)) {
+      throw new Error('La contraseña anterior es incorrecta');
+    }
+
+    user.password = bcrypt.hashSync(newPassword);
+    await user.save();
+
+    return true; // Retorna true si el cambio de contraseña fue exitoso
+  } catch (error) {
+    throw error; // Propaga el error si ocurre algún problema durante el cambio de contraseña
+  }
+};
+
 exports.update = async function ({ id, username }) {
   return User.findByIdAndUpdate(
     id,

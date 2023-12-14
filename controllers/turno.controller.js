@@ -18,6 +18,13 @@ exports.add = async function (req, res) {
     // TODO: validate req.body
     const { dia, horario, nombre, dni, domicilio, nroTramite } = req.body.turno;
 
+    // Verificar si alguno de los campos está vacío o es null
+    if (!dia || !horario || !nombre || !dni || !domicilio || !nroTramite) {
+      return res.status(400).json({
+        message: "Todos los campos son requeridos",
+      });
+    }
+
     const turnoData = {
       dia, horario, nombre, dni, domicilio, nroTramite
     }
