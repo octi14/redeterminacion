@@ -2,18 +2,10 @@ const { Schema, model } = require('mongoose');
 
 const documentoSchema = new Schema(
   {
-    planillaAutorizacion: { type: Schema.Types.ObjectId },
-    dniFrente: { type: Schema.Types.ObjectId },
-    dniDorso: { type: Schema.Types.ObjectId },
-    constanciaCuit: { type: Schema.Types.ObjectId },
-    constanciaIngresosBrutos: { type: Schema.Types.ObjectId },
-    actaPersonaJuridica: { type: Schema.Types.ObjectId },
-    actaDirectorio: { type: Schema.Types.ObjectId },
-    libreDeudaUrbana: { type: Schema.Types.ObjectId },
-    tituloPropiedad: { type: Schema.Types.ObjectId },
-    plano: { type: Schema.Types.ObjectId },
-    certificadoDomicilio: { type: Schema.Types.ObjectId },
-    croquis: { type: Schema.Types.ObjectId }
+    documentos: [{
+      nombreDocumento: { type: String },
+      contenido: { type: Schema.Types.ObjectId }
+    }]
   },
   { autoIndex: false } // Evitar que se generen índices automáticos
 );
@@ -41,6 +33,7 @@ const inmuebleSchema = new Schema({
   nroLocal: String,
   nombreFantasia: String,
   rubro: { type: String, required: true },
+  descripcionRubro: { type: String },
   espacioPublico: { type: Boolean, default: false },
   serviciosHoteleria: [{ servicio: String, value: Boolean }],
   otrosServicios: { type: String, },
@@ -52,6 +45,20 @@ const inmuebleSchema = new Schema({
 
 const habilitacionSchema = new Schema({
   documentos: documentoSchema,
+  documentosAntiguos: {
+    planillaAutorizacion: { type: Schema.Types.ObjectId },
+    dniFrente: { type: Schema.Types.ObjectId },
+    dniDorso: { type: Schema.Types.ObjectId },
+    constanciaCuit: { type: Schema.Types.ObjectId },
+    constanciaIngresosBrutos: { type: Schema.Types.ObjectId },
+    actaPersonaJuridica: { type: Schema.Types.ObjectId },
+    actaDirectorio: { type: Schema.Types.ObjectId },
+    libreDeudaUrbana: { type: Schema.Types.ObjectId },
+    tituloPropiedad: { type: Schema.Types.ObjectId },
+    plano: { type: Schema.Types.ObjectId },
+    certificadoDomicilio: { type: Schema.Types.ObjectId },
+    croquis: { type: Schema.Types.ObjectId }
+  },
   solicitante: solicitanteSchema,
   inmueble: inmuebleSchema,
   status: {
@@ -66,6 +73,12 @@ const habilitacionSchema = new Schema({
   },
   nroExpediente:{
     type:String,
+  },
+  alcance: {
+    type: Number,
+  },
+  nroLegajo: {
+    type: Number,
   },
 },
 {

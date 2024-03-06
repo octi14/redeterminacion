@@ -48,6 +48,7 @@ exports.add = async function (req, res) {
         fileSize: 48 * 1024 * 1024, // 5 MB
       },
     });
+
     // Utilizar multer para manejar los archivos PDF adjuntos
     upload.single('archivo')(req, res, async function (err) {
       if (err instanceof multer.MulterError) {
@@ -65,26 +66,35 @@ exports.add = async function (req, res) {
       const nroTramite = await TicketController.getCurrent();
       const documentos = req.body.habilitacion.documentos || {};
       const formData = req.body.habilitacion;
+      formData.documentos = {
+        documentos: [],
+      }
 
       const promises = [];
 
-      const agregarDocumento = async (nombreCampo, archivo) => {
-        if (archivo) {
+      const agregarDocumento = async (nombreDocumento, documento, nroTramite) => {
+        if (documento && documento.contenido) {
           const bucket = new GridFSBucket(mongoose.connection.db, {
             bucketName: 'documentos',
           });
 
           const options = {
-            contentType: archivo.contentType, // Configurar el tipo de contenido del archivo
+            contentType: documento.contenido.contentType, // Usar el tipo de contenido proporcionado
           };
-          const uploadStream = bucket.openUploadStream(nombreCampo, options);
-          const buffer = Buffer.from(archivo.data, 'base64');
+
+          const buffer = Buffer.from(documento.contenido.data, 'base64'); // Convertir de base64 a buffer
+
+          const nombreArchivo = `${nombreDocumento}_${nroTramite}`; // Agregar el número de trámite al nombre del archivo
+
+          const uploadStream = bucket.openUploadStream(nombreArchivo, options);
           uploadStream.end(buffer);
 
           const promise = new Promise((resolve, reject) => {
             uploadStream.on('finish', async () => {
-              const campoSinSufijo = nombreCampo.replace(`_${nroTramite}`, '');
-              formData.documentos[campoSinSufijo] = uploadStream.id;
+              formData.documentos.documentos.push({
+                nombreDocumento: nombreDocumento,
+                contenido: uploadStream.id,
+              });
               resolve();
             });
             uploadStream.on('error', reject);
@@ -94,19 +104,12 @@ exports.add = async function (req, res) {
         }
       };
 
-      // Agregar los documentos al objeto de documentosParaGuardar
-      agregarDocumento(`planillaAutorizacion_${nroTramite}`, documentos.planillaAutorizacion);
-      agregarDocumento(`dniFrente_${nroTramite}`, documentos.dniFrente);
-      agregarDocumento(`dniDorso_${nroTramite}`, documentos.dniDorso);
-      agregarDocumento(`constanciaCuit_${nroTramite}`, documentos.constanciaCuit);
-      agregarDocumento(`constanciaIngresosBrutos_${nroTramite}`, documentos.constanciaIngresosBrutos);
-      agregarDocumento(`certificadoDomicilio_${nroTramite}`, documentos.certificadoDomicilio);
-      agregarDocumento(`actaPersonaJuridica_${nroTramite}`, documentos.actaPersonaJuridica);
-      agregarDocumento(`actaDirectorio_${nroTramite}`, documentos.actaDirectorio);
-      agregarDocumento(`libreDeudaUrbana_${nroTramite}`, documentos.libreDeudaUrbana);
-      agregarDocumento(`tituloPropiedad_${nroTramite}`, documentos.tituloPropiedad);
-      agregarDocumento(`croquis_${nroTramite}`, documentos.croquis);
-      agregarDocumento(`plano_${nroTramite}`, documentos.plano);
+      for (const nombreDocumento in documentos) {
+        if (documentos.hasOwnProperty(nombreDocumento)) {
+          const documento = documentos[nombreDocumento];
+          agregarDocumento(documento.nombreDocumento, documento, nroTramite);
+        }
+      }
 
       await Promise.all(promises);
 
@@ -207,21 +210,16 @@ exports.getDocumentosById = async (req, res) => {
       });
     }
 
-    const documentos = habilitacion.documentos;
+    const documentosArray = habilitacion.documentos.documentos;
     const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
       bucketName: 'documentos',
     });
 
     const documentosObtenidos = {};
-    const camposPermitidos = [
-      'planillaAutorizacion', 'dniFrente', 'dniDorso', 'constanciaCuit',
-      'constanciaIngresosBrutos', 'actaPersonaJuridica', 'actaDirectorio',
-      'libreDeudaUrbana', 'tituloPropiedad', 'plano', 'certificadoDomicilio', 'croquis'
-    ];
 
     // Usar un bucle for...of para asegurar sincronización
-    for (const campo of camposPermitidos) {
-      const fileId = documentos[campo];
+    for (const documento of documentosArray) {
+      const fileId = documento.contenido;
       if (fileId && mongoose.Types.ObjectId.isValid(fileId)) {
         const downloadStream = bucket.openDownloadStream(fileId);
         const chunks = [];
@@ -235,7 +233,7 @@ exports.getDocumentosById = async (req, res) => {
         const buffer = Buffer.concat(chunks);
         const file = await bucket.find({ _id: mongoose.Types.ObjectId(fileId) }).next();
         if (file) {
-          documentosObtenidos[campo] = {
+          documentosObtenidos[documento.nombreDocumento] = {
             contentType: file.contentType,
             data: buffer.toString('base64'), // Codificar en base64 aquí
             filename: file.filename,
@@ -294,5 +292,62 @@ exports.getByTipoSolicitud = async function (req, res) {
     return res.status(400).json({
       message: e.message,
     });
+  }
+};
+
+exports.migrarHabilitacion = async function (req, res) {
+  try {
+    const { id } = req.params;
+    const habilitacion = await Habilitacion.findById(id).select('documentos');
+
+    if (!habilitacion) {
+      console.log('Habilitación no encontrada');
+      return;
+    }
+
+    const documentosNuevos = [];
+
+    // Copiar los datos del modelo viejo al nuevo
+    // Supongamos que habilitacion.documentos es un objeto convertido a String
+    let documentosString = String(habilitacion.documentos);
+
+    // Utilizamos una expresión regular para extraer los ObjectId
+    const objectIdRegex = /ObjectId\("([a-fA-F0-9]{24})"\)/g;
+    let match;
+    const objectIdArray = [];
+
+    while ((match = objectIdRegex.exec(documentosString)) !== null) {
+      objectIdArray.push(ObjectId(match[1]));
+    }
+
+    // Utilizamos una expresión regular para extraer los nombres de las propiedades
+    const propertyNameRegex = /\s*([^\s:]+)\s*:/g;
+    let othermatch;
+    const propertyNames = [];
+
+    while ((othermatch = propertyNameRegex.exec(documentosString)) !== null) {
+      const propertyName = othermatch[1];
+      if (propertyName !== '_id' && propertyName !== 'documentos') {
+          propertyNames.push(propertyName);
+      }
+    }
+
+    for( var i = 0; i < propertyNames.length; i++){
+      documentosNuevos.push({ nombreDocumento: propertyNames[i], contenido: objectIdArray[i] });
+    };
+    // Actualiza la habilitación con el nuevo modelo
+    habilitacion.documentos = {
+      documentos: documentosNuevos,
+    };
+    await habilitacion.save();
+    // Devuelve un código de estado 200 si la migración fue exitosa
+    return res.status(200).json({
+       message: 'Migración completada para la habilitación con ID:' + habilitacion._id,
+       data: habilitacion
+    });
+  } catch (error) {
+      return res.status(500).json({
+         message: 'Error en la migración:' + String(error)
+      })
   }
 };
