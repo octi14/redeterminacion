@@ -61,6 +61,25 @@ exports.register = async function (req, res) {
   }
 };
 
+exports.changePassword = async function(req, res) {
+  try {
+    const { userId, oldPassword, newPassword } = req.body;
+
+    // Lógica para cambiar la contraseña utilizando el servicio UserService
+    const success = await UserService.changePassword(userId, oldPassword, newPassword);
+
+    if (success) {
+      console.log("éxito");
+      return res.status(200).json({ message: 'Contraseña cambiada exitosamente' });
+    } else {
+      console.log("error");
+      return res.status(400).json({ message: 'No se pudo cambiar la contraseña' });
+    }
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+};
+
 exports.getCurrent = async function (req, res) {
   try {
     const { sub: userId } = req.user;
