@@ -1,7 +1,8 @@
 const { model, Schema } = require("mongoose");
+const User = require("./user.model");
 
 const userActivitySchema = new Schema({
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    userId: { type: Schema.Types.ObjectId, ref: User, required: true },
     actionType: { type: String, required: true },
     actionResult: { type: String },
     sessionId: { type: String },
