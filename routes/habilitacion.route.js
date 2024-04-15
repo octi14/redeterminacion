@@ -15,5 +15,5 @@ router.get("/documentos/:id", HabilitacionController.getDocumentosById);
 router.post("/documentos/delete/:id", HabilitacionController.deleteDocumentosById);
 router.post("/nroTramite", HabilitacionController.getByNroTramite);
 // router.post("/search", ObraController.search);
-router.post("/migrar/:id", HabilitacionController.migrarHabilitacion);
+// router.post("/migrar/:id", HabilitacionController.migrarHabilitacion);
 module.exports = router;
