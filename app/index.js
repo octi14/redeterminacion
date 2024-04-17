@@ -11,6 +11,7 @@ const RedeterminacionRoute = require("../routes/redeterminacion.route");
 const MultimediaRoute = require("../routes/multimedia.route");
 const HabilitacionRoute = require("../routes/habilitacion.route");
 const TurnoRoute = require('../routes/turno.route');
+const AbiertoAnualRoute = require ('../routes/abiertoAnual.route');
 const app = express();
 
 app.use(cors());
@@ -37,5 +38,6 @@ app.use("/redeterminaciones", RedeterminacionRoute);
 app.use("/multimedias", MultimediaRoute);
 app.use("/habilitaciones", HabilitacionRoute);
 app.use("/turnos", TurnoRoute);
+app.use("/abiertoAnual", AbiertoAnualRoute);
 
 module.exports = app;
