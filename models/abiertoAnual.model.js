@@ -10,11 +10,13 @@ const facturaSchema = new Schema(
   );
 
 const abiertoAnualSchema = new Schema({
-    cuit: { type: String },
+    cuit: { type: Number },
     nroLegajo: { type: Number },
     dfe: { type: String },
     facturas: facturaSchema,
     status: [String],
+    fechasCarga: [Date],
+    anio: { type: Number },
     observaciones: { type: String },
 },
     {
