@@ -24,7 +24,7 @@ exports.create = async function (formData) {
       cuit: formData.cuit,
       nroLegajo: formData.nroLegajo,
       facturas: { facturas: [] },
-      status: [],
+      status: ['Incompleto', 'Incompleto','Incompleto'],
       observaciones: ''
     });
 

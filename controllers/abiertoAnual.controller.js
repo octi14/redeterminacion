@@ -101,12 +101,12 @@ exports.getById = async function (req, res) {
   }
 };
 
-exports.getDocumentosById = async (req, res) => {
+exports.getFacturasById = async (req, res) => {
   try {
     const { id } = req.params;
-    const habilitacion = await Habilitacion.findById(id).select('documentos');
+    const tramite = await AbiertoAnual.findById(id).select('facturas');
 
-    if (!habilitacion) {
+    if (!tramite) {
       return res.status(404).json({
         message: 'Habilitación no encontrada.',
       });
@@ -114,7 +114,7 @@ exports.getDocumentosById = async (req, res) => {
 
     const documentosArray = tramite.facturas.facturas;
     const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
-      bucketName: 'documentos',
+      bucketName: 'facturas',
     });
 
     const documentosObtenidos = {};
@@ -135,7 +135,7 @@ exports.getDocumentosById = async (req, res) => {
         const buffer = Buffer.concat(chunks);
         const file = await bucket.find({ _id: mongoose.Types.ObjectId(fileId) }).next();
         if (file) {
-          documentosObtenidos[documento.nombreDocumento] = {
+          documentosObtenidos[documento.contenido] = {
             contentType: file.contentType,
             data: buffer.toString('base64'), // Codificar en base64 aquí
             filename: file.filename,
@@ -153,7 +153,6 @@ exports.getDocumentosById = async (req, res) => {
     });
   }
 };
-
 
 exports.deleteFacturasById = async function (req, res) {
   try {
