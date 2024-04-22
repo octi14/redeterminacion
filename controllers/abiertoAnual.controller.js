@@ -101,6 +101,20 @@ exports.getById = async function (req, res) {
   }
 };
 
+exports.getByCuitLegajo = async function (req, res) {
+  try {
+    const { cuit, nroLegajo } = req.body;
+    const tramite = await AbiertoAnual.findOne({ 'cuit': cuit, 'nroLegajo': nroLegajo }).select('-facturas');
+    return res.status(200).json({
+      data: tramite,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: "Error" + e.message,
+    });
+  }
+};
+
 exports.getFacturasById = async (req, res) => {
   try {
     const { id } = req.params;

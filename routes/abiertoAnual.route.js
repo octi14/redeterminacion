@@ -12,6 +12,6 @@ router.post("/", AbiertoAnualController.add);
 // router.delete("/:id", AbiertoAnualController.delete);
 router.get("/:id", AbiertoAnualController.getById);
 router.get("/facturas/:id", AbiertoAnualController.getFacturasById);
-// router.post("/nroTramite", HabilitacionController.getByNroTramite);
+router.post("/cuit", AbiertoAnualController.getByCuitLegajo);
 // router.post("/search", ObraController.search);
 module.exports = router;
