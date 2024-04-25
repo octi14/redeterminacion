@@ -7,11 +7,11 @@ const AbiertoAnualController = require("../controllers/abiertoAnual.controller")
 // endpoints
 router.get("/", AbiertoAnualController.getAll);
 router.post("/", AbiertoAnualController.add);
-// router.put("/:id", AbiertoAnualController.update);
+router.post("/:id", AbiertoAnualController.addDocument);
 // router.put("/lazy/:id", AbiertoAnualController.updateLazy);
 // router.delete("/:id", AbiertoAnualController.delete);
 router.get("/:id", AbiertoAnualController.getById);
 router.get("/facturas/:id", AbiertoAnualController.getFacturasById);
-router.post("/cuit", AbiertoAnualController.getByCuitLegajo);
+router.post("/buscar/:cuit", AbiertoAnualController.getByCuitLegajo);
 // router.post("/search", ObraController.search);
 module.exports = router;
