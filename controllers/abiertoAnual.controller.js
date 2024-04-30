@@ -2,6 +2,7 @@ const AbiertoAnual = require('../models/abiertoAnual.model'); // Asumiendo que h
 const AbiertoAnualService = require('../services/abiertoAnual.service');
 const multer = require('multer');
 const { GridFsStorage } = require('multer-gridfs-storage');
+const { GridFSBucket } = require('mongodb');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 // Configuración de GridFsStorage para guardar en un bucket 'facturas'
@@ -23,44 +24,82 @@ const upload = multer({
 
 // Ejemplo de método para añadir un documento a un registro de AbiertoAnual
 exports.addDocument = async function(req, res) {
-    // Utilizar multer para manejar los archivos PDF adjuntos
+    try {
     const upload = multer({
       storage, // Utiliza el almacenamiento de GridFS configurado previamente
       limits: {
         fileSize: 48 * 1024 * 1024, // 5 MB
       },
     });
-  const { id } = req.params; // ID del registro AbiertoAnual
 
-  upload.single('factura')(req, res, async function(err) {
-    if (err instanceof multer.MulterError) {
-      return res.status(500).json({ message: "Error al subir el archivo: " + err.message });
-    } else if (err) {
-      return res.status(500).json({ message: "Error del servidor al subir archivo" });
-    }
+    const { id } = req.params;
+    const { periodo } = req.body; // ID del registro AbiertoAnual y posición en el array
 
-    try {
+    upload.single('factura')(req, res, async function(err) {
+      if (err instanceof multer.MulterError) {
+        console.log('Error de Multer:', err);
+        return res.status(400).json({
+          message: 'Error al cargar el archivo.',
+        });
+      } else if (err) {
+        console.log('Error:', err);
+        return res.status(500).json({
+          message: 'Error interno del servidor.',
+        });
+      }
       const abiertoAnual = await AbiertoAnual.findById(id);
       if (!abiertoAnual) {
         return res.status(404).json({ message: 'Registro no encontrado' });
       }
 
-      // Suponiendo que 'contenido' en facturas debe almacenar el ID del archivo en GridFS
-      if (!abiertoAnual.facturas) {
-        abiertoAnual.facturas = [];
+      // Si ya hay un documento en la posición especificada, eliminarlo del bucket
+      if (abiertoAnual.facturas && abiertoAnual.facturas[periodo-1]) {
+        // Código para eliminar el documento del bucket
+        // Supongamos que tienes una función para eliminar documentos llamada deleteDocument
+        await deleteDocument(abiertoAnual.facturas[periodo-1].contenido);
       }
 
-      abiertoAnual.facturas.push({
-        contenido: new mongoose.Types.ObjectId(req.file.id) // Guarda el ID del archivo subido
+      const promises = [];
+
+      // Subir el archivo al bucket 'facturas'
+      const bucket = new GridFSBucket(mongoose.connection.db, {
+        bucketName: 'facturas',
       });
 
+      const options = {
+        contentType: req.body.factura.contenido.contentType, // Usar el tipo de contenido proporcionado
+      };
+
+      const buffer = req.body.factura.contenido.data;
+
+      const nombreArchivo = `${id}_${periodo}`; // Utilizar el ID de la factura y el periodo para formar el nombre del archivo
+
+      const uploadStream = bucket.openUploadStream(nombreArchivo, options);
+      uploadStream.end(buffer);
+
+      // Esperar a que se complete la subida del archivo
+      await new Promise((resolve, reject) => {
+        uploadStream.on('finish', resolve);
+        uploadStream.on('error', reject);
+      });
+
+      // Actualizar el array de facturas en la posición especificada con el ID del archivo subido
+      abiertoAnual.facturas.facturas[periodo-1] = {
+        contenido: uploadStream.id // Guarda el ID del archivo subido
+      };
+
+      // Actualizar fechasCarga y status
+      abiertoAnual.fechasCarga[periodo-1] = new Date();
+      abiertoAnual.status[periodo-1] = "En revisión";
+
       await abiertoAnual.save();
-      res.status(201).json({ message: 'Factura añadida correctamente', facturaId: req.file.id });
-    } catch (e) {
+      res.status(201).json({ message: 'Factura añadida correctamente'});
+    })} catch (e) {
       res.status(400).json({ message: e.message });
-    }
-  });
+    };
 };
+
+
 
 exports.getAll = async function (req, res) {
   try {
@@ -103,7 +142,8 @@ exports.getById = async function (req, res) {
 
 exports.getByCuitLegajo = async function (req, res) {
   try {
-    const { cuit, nroLegajo } = req.body;
+    const { cuit } = req.params;
+    const {  nroLegajo } = req.body;
     const tramite = await AbiertoAnual.findOne({ 'cuit': cuit, 'nroLegajo': nroLegajo }).select('-facturas');
     return res.status(200).json({
       data: tramite,
@@ -114,6 +154,7 @@ exports.getByCuitLegajo = async function (req, res) {
     });
   }
 };
+
 
 exports.getFacturasById = async (req, res) => {
   try {
@@ -131,7 +172,7 @@ exports.getFacturasById = async (req, res) => {
       bucketName: 'facturas',
     });
 
-    const documentosObtenidos = {};
+    const documentosObtenidos = [];
 
     // Usar un bucle for...of para asegurar sincronización
     for (const documento of documentosArray) {
@@ -149,11 +190,11 @@ exports.getFacturasById = async (req, res) => {
         const buffer = Buffer.concat(chunks);
         const file = await bucket.find({ _id: mongoose.Types.ObjectId(fileId) }).next();
         if (file) {
-          documentosObtenidos[documento.contenido] = {
+          documentosObtenidos.push({
             contentType: file.contentType,
             data: buffer.toString('base64'), // Codificar en base64 aquí
             filename: file.filename,
-          };
+          });
         }
       }
     }
