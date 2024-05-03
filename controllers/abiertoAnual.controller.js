@@ -56,7 +56,7 @@ exports.addDocument = async function(req, res) {
       if (abiertoAnual.facturas && abiertoAnual.facturas[periodo-1]) {
         // Código para eliminar el documento del bucket
         // Supongamos que tienes una función para eliminar documentos llamada deleteDocument
-        await deleteDocument(abiertoAnual.facturas[periodo-1].contenido);
+        // await deleteDocument(abiertoAnual.facturas[periodo-1].contenido);
       }
 
       const promises = [];
@@ -174,26 +174,35 @@ exports.getFacturasById = async (req, res) => {
 
     const documentosObtenidos = [];
 
-    // Usar un bucle for...of para asegurar sincronización
     for (const documento of documentosArray) {
       const fileId = documento.contenido;
       if (fileId && mongoose.Types.ObjectId.isValid(fileId)) {
         const downloadStream = bucket.openDownloadStream(fileId);
         const chunks = [];
 
-        await new Promise((resolve, reject) => {
-          downloadStream.on('data', chunk => chunks.push(chunk));
-          downloadStream.on('error', reject);
-          downloadStream.on('end', resolve);
-        });
+        try {
+          await new Promise((resolve, reject) => {
+            downloadStream.on('data', chunk => chunks.push(chunk));
+            downloadStream.on('error', error => {
+              console.error('Error downloading file:', error);
+              reject(error);
+            });
+            downloadStream.on('end', resolve);
+          });
 
-        const buffer = Buffer.concat(chunks);
-        const file = await bucket.find({ _id: mongoose.Types.ObjectId(fileId) }).next();
-        if (file) {
-          documentosObtenidos.push({
-            contentType: file.contentType,
-            data: buffer.toString('base64'), // Codificar en base64 aquí
-            filename: file.filename,
+          const buffer = Buffer.concat(chunks);
+          const file = await bucket.find({ _id: mongoose.Types.ObjectId(fileId) }).next();
+          if (file) {
+            documentosObtenidos.push({
+              contentType: file.contentType,
+              data: buffer.toString('base64'),
+              filename: file.filename,
+            });
+          }
+        } catch (error) {
+          return res.status(500).json({
+            message: "Error processing file",
+            details: error.message
           });
         }
       }
@@ -208,6 +217,7 @@ exports.getFacturasById = async (req, res) => {
     });
   }
 };
+
 
 exports.deleteFacturasById = async function (req, res) {
   try {
