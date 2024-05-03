@@ -4,6 +4,7 @@ const facturaSchema = new Schema(
     {
       facturas: [{
         contenido: { type: Schema.Types.ObjectId },
+        observaciones: { type: String },
       }]
     },
     { autoIndex: false } // Evitar que se generen índices automáticos
@@ -17,7 +18,7 @@ const abiertoAnualSchema = new Schema({
     status: [String],
     fechasCarga: [Date],
     anio: { type: Number },
-    observaciones: { type: String },
+
 },
     {
     timestamps: true,
