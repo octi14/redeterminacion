@@ -79,26 +79,14 @@ exports.delete = async function (req, res) {
   }
 };
 
-exports.getById = async function (req, res) {
+exports.getSingle = async function (req, res) {
   try {
     // TODO: validate req.params
-    const { id } = req.params;
-    let certificado = await MaestroComercioService.getById(id);
-    return res.status(200).json({
-      data: certificado,
-    });
-  } catch (e) {
-    return res.status(400).json({
-      message: e.message,
-    });
-  }
-};
-
-exports.getByObjeto = async function (req, res) {
-  try {
-    // TODO: validate req.params
-    const { objeto } = req.params;
-    let certificado = await MaestroComercioService.getByObjeto(objeto);
+    const { cuit, legajo } = req.body;
+    let certificado = await MaestroComercioService.search({
+      cuit: cuit,
+      legajo: legajo
+    })
     return res.status(200).json({
       data: certificado,
     });

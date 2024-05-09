@@ -40,10 +40,6 @@ exports.getById = async function (id) {
   return Certificado.findById(id);
 };
 
-exports.getByObjeto = async function (objeto) {
-  return Certificado.find({ objeto: objeto });
-};
-
 exports.getMany = async function (ids) {
   return Certificado.find().where("_id").in(ids);
 };

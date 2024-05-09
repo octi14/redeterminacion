@@ -108,21 +108,6 @@ exports.getById = async function (req, res) {
   }
 };
 
-exports.getByObjeto = async function (req, res) {
-  try {
-    // TODO: validate req.params
-    const { objeto } = req.params;
-    let certificado = await CertificadoService.getByObjeto(objeto);
-    return res.status(200).json({
-      data: certificado,
-    });
-  } catch (e) {
-    return res.status(400).json({
-      message: e.message,
-    });
-  }
-};
-
 exports.search = async function (req, res) {
   try {
     const { obra } = req.body;

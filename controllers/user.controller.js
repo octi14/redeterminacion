@@ -80,20 +80,6 @@ exports.changePassword = async function(req, res) {
   }
 };
 
-exports.getCurrent = async function (req, res) {
-  try {
-    const { sub: userId } = req.user;
-    let user = await UserService.getById(userId);
-    return res.status(200).json({
-      data: user,
-    });
-  } catch (e) {
-    return res.status(400).json({
-      message: e.message,
-    });
-  }
-};
-
 exports.checkToken = async function(req, res){
   try{
     const token = req.body.token;

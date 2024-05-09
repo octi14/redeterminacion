@@ -40,10 +40,6 @@ exports.getById = async function (id) {
   return Redeterminacion.findById(id);
 };
 
-exports.getByObjeto = async function (objeto) {
-  return Redeterminacion.find({ objeto: objeto });
-};
-
 exports.getByObra = async function (obra) {
   return Redeterminacion.find({ obra: obra });
 };

@@ -64,27 +64,24 @@ exports.getById = async function (id) {
   return Certificado.findById(id);
 };
 
-exports.getByObjeto = async function (objeto) {
-  return Certificado.find({ objeto: objeto });
-};
-
 exports.getMany = async function (ids) {
   return Certificado.find().where("_id").in(ids);
 };
 
-exports.search = async function (obra) {
+exports.search = async function ({cuit, legajo}) {
+  console.log(cuit, legajo)
   let query = {};
-  // if (expediente) {
-  //   // // busca cualquier certificado por el expediente
-  //   query.expediente = { $regex: expediente, $options: "i" };
-  // }
-  if (obra) {
+  if (cuit) {
+    // // busca cualquier certificado por el expediente
+    query.expediente = { $regex: cuit, $options: "i" };
+  }
+  if (legajo) {
     // busca cualquier certificado por el objeto
-    query.obra = { $regex: obra, $options: "i" };
+    query.data = { $regex: legajo, $options: "i" };
   }
   // if (adjudicado) {
   //   // busca cualquier certificado por el expediente
   //   query.adjudicado = { $regex: adjudicado, $options: "i" };
   // }
-  return Certificado.find(query);
+  return MaestroComercio.find({cuit:cuit,legajo:legajo});
 };

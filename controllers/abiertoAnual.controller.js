@@ -52,12 +52,13 @@ exports.addDocument = async function(req, res) {
         return res.status(404).json({ message: 'Registro no encontrado' });
       }
 
-      // Si ya hay un documento en la posición especificada, eliminarlo del bucket
-      if (abiertoAnual.facturas && abiertoAnual.facturas[periodo-1]) {
-        // Código para eliminar el documento del bucket
-        // Supongamos que tienes una función para eliminar documentos llamada deleteDocument
-        // await deleteDocument(abiertoAnual.facturas[periodo-1].contenido);
-      }
+    // Si ya hay un documento en la posición especificada, eliminarlo del bucket
+    if (abiertoAnual.facturas && abiertoAnual.facturas.facturas[periodo-1]) {
+      const bucket = new GridFSBucket(mongoose.connection.db, {
+        bucketName: 'facturas',
+      });
+      await bucket.delete(abiertoAnual.facturas.facturas[periodo-1].contenido);
+    }
 
       const promises = [];
 
@@ -70,7 +71,8 @@ exports.addDocument = async function(req, res) {
         contentType: req.body.factura.contenido.contentType, // Usar el tipo de contenido proporcionado
       };
 
-      const buffer = req.body.factura.contenido.data;
+    // Convertir el archivo a un buffer desde base64
+    const buffer = Buffer.from(req.body.factura.contenido.data, 'base64');
 
       const nombreArchivo = `${id}_${periodo}`; // Utilizar el ID de la factura y el periodo para formar el nombre del archivo
 
