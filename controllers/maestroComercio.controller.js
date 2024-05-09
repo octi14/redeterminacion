@@ -1,13 +1,13 @@
-let CertificadoService = require("../services/certificado.service");
+let MaestroComercioService = require("../services/maestroComercio.service");
 
 exports.getAll = async function (req, res) {
   try {
     // const { sort, skip, limit } = req.pagination;
-    let certificados = await CertificadoService.findAll(
+    let registros = await MaestroComercioService.findAll(
       // sort, skip, limit
       );
     return res.status(200).json({
-      data: certificados,
+      data: registros,
     });
   } catch (e) {
     return res.status(400).json({
@@ -16,39 +16,25 @@ exports.getAll = async function (req, res) {
   }
 };
 
-exports.add = async function (req, res) {
+exports.create = async function(req, res) {
   try {
-    const { sub: user } = req.user;
+    const fileContent = req.body.file;
 
-    // TODO: validate req.body
-    const {
-      obra,
-      items,
-    } = req.body.certificado;
+    // Llamar al servicio para procesar el archivo CSV
+    await MaestroComercioService.processCSV(fileContent);
 
-    const certificadoData = {
-      obra,
-      items,
-    };
-
-    const createdFile = await CertificadoService.create(certificadoData);
-
-    return res.status(201).json({
-      message: "Created",
-      data: createdFile,
-    });
-  } catch (e) {
-    return res.status(400).json({
-      message: e.message,
-    });
+    res.status(200).send('Archivo CSV procesado correctamente');
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Error al procesar el archivo CSV');
   }
-};
+}
 
 exports.update = async function (req, res) {
   try {
     // TODO: validate req.params and req.body
     const { id } = req.params;
-    const certificado = await CertificadoService.getById(id);
+    const certificado = await MaestroComercioService.getById(id);
     const {
       nro,
       fecha,
@@ -57,7 +43,7 @@ exports.update = async function (req, res) {
       fecha_cancelacion,
     } = req.body.certificado;
 
-    const updated = await CertificadoService.update(id, {
+    const updated = await MaestroComercioService.update(id, {
       nro: nro,
       fecha: fecha,
       factura: factura,
@@ -79,13 +65,12 @@ exports.update = async function (req, res) {
 exports.delete = async function (req, res) {
   try {
     // TODO: validate req.params
-    const id  = req.params.name;
-    // const { sub: user } = req.user;
+    const { id } = req.params;
 
-    await CertificadoService.delete(id);
+    await MaestroComercioService.delete(id);
 
     return res.status(200).json({
-      message: "Certificado eliminado.",
+      message: "Certificado eliminada.",
     });
   } catch (e) {
     return res.status(400).json({
@@ -94,11 +79,14 @@ exports.delete = async function (req, res) {
   }
 };
 
-exports.getById = async function (req, res) {
+exports.getSingle = async function (req, res) {
   try {
     // TODO: validate req.params
-    const { id } = req.params;
-    let certificado = await CertificadoService.getById(id);
+    const { cuit, legajo } = req.body;
+    let certificado = await MaestroComercioService.search({
+      cuit: cuit,
+      legajo: legajo
+    })
     return res.status(200).json({
       data: certificado,
     });
@@ -112,7 +100,7 @@ exports.getById = async function (req, res) {
 exports.search = async function (req, res) {
   try {
     const { obra } = req.body;
-    let certificados = await CertificadoService.getByObra(obra);
+    let certificados = await MaestroComercioService.search(obra);
     return res.status(200).json({
       data: certificados,
     });

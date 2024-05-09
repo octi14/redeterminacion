@@ -116,21 +116,6 @@ exports.getById = async function (req, res) {
   }
 };
 
-exports.getByObjeto = async function (req, res) {
-  try {
-    // TODO: validate req.params
-    const { objeto } = req.params;
-    let redeterminacion = await RedeterminacionService.getByObjeto(objeto);
-    return res.status(200).json({
-      data: redeterminacion,
-    });
-  } catch (e) {
-    return res.status(400).json({
-      message: e.message,
-    });
-  }
-};
-
 exports.search = async function (req, res) {
   try {
     const { obra, certificado } = req.body;
