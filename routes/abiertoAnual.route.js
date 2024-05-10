@@ -10,6 +10,7 @@ router.post("/", AbiertoAnualController.add);
 router.post("/:id", AbiertoAnualController.addDocument);
 // router.put("/lazy/:id", AbiertoAnualController.updateLazy);
 // router.delete("/:id", AbiertoAnualController.delete);
+router.put("/:id", AbiertoAnualController.update);
 router.get("/:id", AbiertoAnualController.getById);
 router.get("/facturas/:id", AbiertoAnualController.getFacturasById);
 router.post("/buscar/:cuit", AbiertoAnualController.getByCuitLegajo);

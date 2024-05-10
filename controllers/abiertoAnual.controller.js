@@ -53,11 +53,11 @@ exports.addDocument = async function(req, res) {
       }
 
     // Si ya hay un documento en la posición especificada, eliminarlo del bucket
-    if (abiertoAnual.facturas && abiertoAnual.facturas.facturas[periodo-1]) {
+    if (abiertoAnual.facturas && abiertoAnual.facturas[periodo].contenido) {
       const bucket = new GridFSBucket(mongoose.connection.db, {
         bucketName: 'facturas',
       });
-      await bucket.delete(abiertoAnual.facturas.facturas[periodo-1].contenido);
+      await bucket.delete(abiertoAnual.facturas[periodo].contenido);
     }
 
       const promises = [];
@@ -86,13 +86,13 @@ exports.addDocument = async function(req, res) {
       });
 
       // Actualizar el array de facturas en la posición especificada con el ID del archivo subido
-      abiertoAnual.facturas.facturas[periodo-1] = {
+      abiertoAnual.facturas[periodo] = {
         contenido: uploadStream.id // Guarda el ID del archivo subido
       };
 
       // Actualizar fechasCarga y status
-      abiertoAnual.fechasCarga[periodo-1] = new Date();
-      abiertoAnual.status[periodo-1] = "En revisión";
+      abiertoAnual.fechasCarga[periodo] = new Date();
+      abiertoAnual.status[periodo] = "En revisión";
 
       await abiertoAnual.save();
       res.status(201).json({ message: 'Factura añadida correctamente'});
@@ -131,7 +131,7 @@ exports.add = async function(req, res) {
 exports.getById = async function (req, res) {
   try {
     const { id } = req.params;
-    const tramite = await AbiertoAnual.findById(id).select('-facturas');
+    const tramite = await AbiertoAnual.findById(id);
     return res.status(200).json({
       data: tramite,
     });
@@ -146,7 +146,7 @@ exports.getByCuitLegajo = async function (req, res) {
   try {
     const { cuit } = req.params;
     const {  nroLegajo } = req.body;
-    const tramite = await AbiertoAnual.findOne({ 'cuit': cuit, 'nroLegajo': nroLegajo }).select('-facturas');
+    const tramite = await AbiertoAnual.findOne({ 'cuit': cuit, 'nroLegajo': nroLegajo });
     return res.status(200).json({
       data: tramite,
     });
@@ -161,7 +161,7 @@ exports.getByCuitLegajo = async function (req, res) {
 exports.getFacturasById = async (req, res) => {
   try {
     const { id } = req.params;
-    const tramite = await AbiertoAnual.findById(id).select('facturas');
+    const tramite = await AbiertoAnual.findById(id);
 
     if (!tramite) {
       return res.status(404).json({
@@ -169,7 +169,7 @@ exports.getFacturasById = async (req, res) => {
       });
     }
 
-    const documentosArray = tramite.facturas.facturas;
+    const documentosArray = tramite.facturas;
     const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
       bucketName: 'facturas',
     });
@@ -214,6 +214,28 @@ exports.getFacturasById = async (req, res) => {
       data: documentosObtenidos,
     });
   } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
+
+exports.update = async (req, res) => {
+  try {
+    const { id } = req.params; // Suponiendo que proporcionas el ID del documento a actualizar en los parámetros de la solicitud.
+    const camposActualizados = req.body; // Suponiendo que envías los campos actualizados en el cuerpo de la solicitud.
+
+    // Encontrar el documento por ID y actualizarlo
+    const documentoActualizado = await AbiertoAnualService.update(
+      id,
+      camposActualizados.tramite
+    );
+
+    if (!documentoActualizado) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
+    }
+    return res.status(200).json(documentoActualizado);
+  } catch (error) {
     return res.status(400).json({
       message: e.message,
     });
