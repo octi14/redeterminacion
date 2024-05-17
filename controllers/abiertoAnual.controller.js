@@ -145,17 +145,35 @@ exports.getById = async function (req, res) {
 exports.getByCuitLegajo = async function (req, res) {
   try {
     const { cuit } = req.params;
-    const {  nroLegajo } = req.body;
-    const tramite = await AbiertoAnual.findOne({ 'cuit': cuit, 'nroLegajo': nroLegajo });
+    const { nroLegajo } = req.body;
+
+    // Convertir cuit a número
+    const cuitNumber = Number(cuit);
+
+    if (isNaN(cuitNumber)) {
+      return res.status(400).json({
+        message: "CUIT inválido",
+      });
+    }
+
+    const tramite = await AbiertoAnual.findOne({ cuit: cuitNumber, nroLegajo: nroLegajo });
+
+    if (!tramite) {
+      return res.status(200).json({
+        data: [],
+      });
+    }
+
     return res.status(200).json({
       data: tramite,
     });
   } catch (e) {
     return res.status(400).json({
-      message: "Error" + e.message,
+      message: "Error: " + e.message,
     });
   }
 };
+
 
 
 exports.getFacturasById = async (req, res) => {
