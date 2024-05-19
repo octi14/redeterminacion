@@ -53,11 +53,13 @@ exports.addDocument = async function(req, res) {
       }
 
     // Si ya hay un documento en la posición especificada, eliminarlo del bucket
-    if (abiertoAnual.facturas && abiertoAnual.facturas[periodo].contenido) {
+    if (abiertoAnual.facturas && abiertoAnual.facturas[periodo]) {
       const bucket = new GridFSBucket(mongoose.connection.db, {
         bucketName: 'facturas',
       });
-      await bucket.delete(abiertoAnual.facturas[periodo].contenido);
+      if(abiertoAnual.facturas[periodo].contenido){
+        await bucket.delete(abiertoAnual.facturas[periodo].contenido);
+      }
     }
 
       const promises = [];
