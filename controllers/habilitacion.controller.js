@@ -171,6 +171,68 @@ exports.updateLazy = async (req, res) => {
   }
 };
 
+exports.deleteDocumentosById = async function (req, res) {
+  try {
+    const { id } = req.params; // Obtén el ID de la habilitación que deseas eliminar los documentos
+    // Busca la habilitación por su ID
+    var habilitacion = null;
+    try{
+      habilitacion = await Habilitacion.findById(new mongoose.Types.ObjectId(id)).select("documentos").exec();
+    }catch(e){
+      console.log("Algo está mal con el ID.");
+    };
+
+    if (!habilitacion) {
+      return res.status(404).json({
+        message: 'La habilitación no se encontró en la base de datos.',
+      });
+    }
+
+    const documentos = habilitacion.documentos.toObject(); // Convierte a un objeto Mongoose
+    console.log(documentos);
+
+    // Accede al bucket de GridFS
+    const bucket = new GridFSBucket(mongoose.connection.db, {
+      bucketName: 'documentos',
+    });
+
+    // Itera a través de los campos de documentos y elimina cada documento asociado a la habilitación específica
+    const promises = Object.keys(documentos).map(async (campo) => {
+      var documentoId = null;
+      if(documentos[campo] != null && campo != "_id"){
+        documentoId = documentos[campo];
+        // Utiliza el método delete para eliminar el documento por su ID
+        try{
+          await bucket.delete(documentoId);
+        }catch(e){
+          console.log("Error tratando de borrar el documento " + documentoId);
+        }
+      }
+      documentos[campo] = null;
+    });
+
+    // Espera a que todas las eliminaciones se completen antes de responder
+
+    await Promise.all(promises);
+
+    console.log(documentos);
+
+    // Actualiza la referencia de documentos en la instancia de habilitacion
+    habilitacion.documentos = documentos;
+
+    // Guarda la instancia actualizada en la base de datos
+    await habilitacion.save();
+    
+    return res.status(200).json({
+      message: 'Documentos eliminados con éxito.',
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
+
 exports.delete = async function (req, res) {
   try {
     const { id } = req.params;
@@ -273,7 +335,6 @@ exports.getAprobados = async function (req, res) {
     return res.status(200).json({
       data: habilitaciones,
     });
-    consolee.log("A");
   } catch (e) {
     return res.status(400).json({
       message: "Error" + e.message,
@@ -349,5 +410,67 @@ exports.migrarHabilitacion = async function (req, res) {
       return res.status(500).json({
          message: 'Error en la migración:' + String(error)
       })
+  }
+};
+
+exports.deleteDocumentosById = async function (req, res) {
+  try {
+    const { id } = req.params; // Obtén el ID de la habilitación que deseas eliminar los documentos
+    // Busca la habilitación por su ID
+    var habilitacion = null;
+    try{
+      habilitacion = await Habilitacion.findById(new mongoose.Types.ObjectId(id)).select("documentos").exec();
+    }catch(e){
+      console.log("Algo está mal con el ID.");
+    };
+
+    if (!habilitacion) {
+      return res.status(404).json({
+        message: 'La habilitación no se encontró en la base de datos.',
+      });
+    }
+
+    const documentos = habilitacion.documentos.toObject(); // Convierte a un objeto Mongoose
+    console.log(documentos);
+
+    // Accede al bucket de GridFS
+    const bucket = new GridFSBucket(mongoose.connection.db, {
+      bucketName: 'documentos',
+    });
+
+    // Itera a través de los campos de documentos y elimina cada documento asociado a la habilitación específica
+    const promises = Object.keys(documentos).map(async (campo) => {
+      var documentoId = null;
+      if(documentos[campo] != null && campo != "_id"){
+        documentoId = documentos[campo];
+        // Utiliza el método delete para eliminar el documento por su ID
+        try{
+          await bucket.delete(documentoId);
+        }catch(e){
+          console.log("Error tratando de borrar el documento " + documentoId);
+        }
+      }
+      documentos[campo] = null;
+    });
+
+    // Espera a que todas las eliminaciones se completen antes de responder
+
+    await Promise.all(promises);
+
+    console.log(documentos);
+
+    // Actualiza la referencia de documentos en la instancia de habilitacion
+    habilitacion.documentos = documentos;
+
+    // Guarda la instancia actualizada en la base de datos
+    await habilitacion.save();
+
+    return res.status(200).json({
+      message: 'Facturas eliminadas con éxito.',
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
   }
 };

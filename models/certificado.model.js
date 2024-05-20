@@ -9,7 +9,7 @@ const CertificadoSchema = new Schema(
     },
     items: [
       {
-        contratado: String,
+        contratado: Number,
         anticipo: Number,
         item: String,
         avance: Number,
