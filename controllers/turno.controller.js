@@ -16,17 +16,17 @@ exports.getAll = async function (req, res) {
 exports.add = async function (req, res) {
   try {
     // TODO: validate req.body
-    const { dia, horario, nombre, dni, domicilio, nroTramite } = req.body.turno;
+    const { dia, horario, nombre, dni, domicilio, nroTramite, tipoTramite } = req.body.turno;
 
     // Verificar si alguno de los campos está vacío o es null
-    if (!dia || !horario || !nombre || !dni || !domicilio || !nroTramite) {
+    if (!dia || !horario || !nombre || !dni || !domicilio || !nroTramite || !tipoTramite) {
       return res.status(400).json({
         message: "Todos los campos son requeridos",
       });
     }
 
     const turnoData = {
-      dia, horario, nombre, dni, domicilio, nroTramite
+      dia, horario, nombre, dni, domicilio, nroTramite, tipoTramite
     }
 
     const createdTurno = await TurnoService.create(turnoData);

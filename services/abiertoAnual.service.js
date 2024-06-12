@@ -11,7 +11,7 @@ let AbiertoAnual = require("../models/abiertoAnual.model");
 
 exports.findAll = async function () {
   try {
-    return await AbiertoAnual.find().select('-facturas');
+    return await AbiertoAnual.find();
   } catch (e) {
     console.error(e);
     throw Error("Error getting objects.");
