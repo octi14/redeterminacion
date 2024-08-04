@@ -197,7 +197,11 @@ exports.getFacturasById = async (req, res) => {
     const documentosObtenidos = [];
 
     for (const documento of documentosArray) {
-      const fileId = documento.contenido;
+      var fileId = null;
+      if (documento != null){
+        fileId = documento.contenido;
+      }
+      console.log("File: " + fileId);
       if (fileId && mongoose.Types.ObjectId.isValid(fileId)) {
         const downloadStream = bucket.openDownloadStream(fileId);
         const chunks = [];
@@ -227,6 +231,8 @@ exports.getFacturasById = async (req, res) => {
             details: error.message
           });
         }
+      }else{
+        documentosObtenidos.push(null);
       }
     }
 

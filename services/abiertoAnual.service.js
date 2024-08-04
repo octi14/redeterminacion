@@ -23,7 +23,7 @@ exports.create = async function (formData) {
     const nuevoAbiertoAnual = new AbiertoAnual({
       cuit: formData.cuit,
       nroLegajo: formData.nroLegajo,
-      facturas: { facturas: [] },
+      facturas: [null, null, null],
       status: ['Incompleto', 'Incompleto','Incompleto'],
       observaciones: ''
     });
