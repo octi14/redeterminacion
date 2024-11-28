@@ -367,7 +367,7 @@ exports.deleteDocumentosById = async function (req, res) {
 
     if (!habilitacion) {
       return res.status(404).json({
-        message: 'La habilitación no se encontró en la base de datos.',
+        message: 'La habilitación no se encontró en la base de datos',
       });
     }
 
