@@ -201,7 +201,6 @@ exports.getFacturasById = async (req, res) => {
       if (documento != null){
         fileId = documento.contenido;
       }
-      console.log("File: " + fileId);
       if (fileId && mongoose.Types.ObjectId.isValid(fileId)) {
         const downloadStream = bucket.openDownloadStream(fileId);
         const chunks = [];
