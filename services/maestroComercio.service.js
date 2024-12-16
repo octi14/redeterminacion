@@ -69,7 +69,6 @@ exports.getMany = async function (ids) {
 };
 
 exports.search = async function ({cuit, legajo}) {
-  console.log(cuit, legajo)
   let query = {};
   if (cuit) {
     // // busca cualquier certificado por el expediente
