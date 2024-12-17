@@ -58,7 +58,12 @@ exports.addDocument = async function(req, res) {
         bucketName: 'facturas',
       });
       if(abiertoAnual.facturas[periodo].contenido){
-        await bucket.delete(abiertoAnual.facturas[periodo].contenido);
+        try{
+          await bucket.delete(abiertoAnual.facturas[periodo].contenido);
+        }catch(e){
+          //si no hay o no se pudo encontrar, continuar
+          console.log("Hubo un error eliminando el archivo. Continuando...");
+        }
       }
     }
 
@@ -249,6 +254,8 @@ exports.update = async (req, res) => {
   try {
     const { id } = req.params; // Suponiendo que proporcionas el ID del documento a actualizar en los parámetros de la solicitud.
     const camposActualizados = req.body; // Suponiendo que envías los campos actualizados en el cuerpo de la solicitud.
+
+    console.log("Intentando actualizar un documento reemplazándolo por este objeto: " + camposActualizados );
 
     // Encontrar el documento por ID y actualizarlo
     const documentoActualizado = await AbiertoAnualService.update(
