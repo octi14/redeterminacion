@@ -6,6 +6,18 @@ const {GridFsStorage} = require('multer-gridfs-storage');
 const { GridFSBucket } = require('mongodb');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
+
+const AWS = require('aws-sdk');
+const { AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION } = require('../config');
+
+
+// Configurar AWS S3
+const s3 = new AWS.S3({
+  accessKeyId: AWS_ACCESS_KEY_ID,
+  secretAccessKey: AWS_SECRET_ACCESS_KEY,
+  region: AWS_REGION,
+});
+
 // Crear una nueva instancia de GridFsStorage con la conexión de Mongoose
 const storage = new GridFsStorage({
   url: 'mongodb+srv://octi14:octavio14@tiendacluster.1zpsi.mongodb.net/test?authSource=admin&replicaSet=atlas-7lljh4-shard-0&readPreference=primary&ssl=true', // Reemplaza por la URL de tu base de datos
@@ -17,6 +29,9 @@ const storage = new GridFsStorage({
     };
   },
 });
+
+const s3storage = multer.memoryStorage();  // Usamos almacenamiento en memoria con Multer
+
 
 // Configurar el storage para multer (opcional)
 // const storage = multer.memoryStorage(); // Almacenar los archivos en memoria como Buffers
@@ -41,73 +56,81 @@ exports.getAll = async function (req, res) {
 
 exports.add = async function (req, res) {
   try {
-    // Utilizar multer para manejar los archivos PDF adjuntos
     const upload = multer({
-      storage, // Utiliza el almacenamiento de GridFS configurado previamente
+      s3storage,
       limits: {
-        fileSize: 48 * 1024 * 1024, // 5 MB
+        fileSize: 48 * 1024 * 1024, // 48 MB
       },
     });
 
-    // Utilizar multer para manejar los archivos PDF adjuntos
-    upload.single('archivo')(req, res, async function (err) {
+    upload.array('archivo', 10)(req, res, async function (err) {
       if (err instanceof multer.MulterError) {
         console.log('Error de Multer:', err);
-        return res.status(400).json({
-          message: 'Error al cargar el archivo PDF.',
-        });
+        if (!res.headersSent) {
+          return res.status(400).json({
+            message: 'Error al cargar el archivo.',
+          });
+        }
       } else if (err) {
         console.log('Error:', err);
-        return res.status(500).json({
-          message: 'Error interno del servidor.',
-        });
+        if (!res.headersSent) {
+          return res.status(500).json({
+            message: 'Error interno del servidor.',
+          });
+        }
       }
 
       const nroTramite = await TicketController.getCurrent();
       const documentos = req.body.habilitacion.documentos || {};
       const formData = req.body.habilitacion;
-      formData.documentos = {
-        documentos: [],
-      }
+      formData.documentos = { documentos: [] };
 
       const promises = [];
 
       const agregarDocumento = async (nombreDocumento, documento, nroTramite) => {
         if (documento && documento.contenido) {
-          const bucket = new GridFSBucket(mongoose.connection.db, {
-            bucketName: 'documentos',
-          });
+          // Determinar la extensión basándonos en el ContentType
+          const contentType = documento.contenido.contentType; // Ejemplo: 'application/pdf'
+          const extension = contentType.split('/')[1]; // Ejemplo: 'pdf'
 
-          const options = {
-            contentType: documento.contenido.contentType, // Usar el tipo de contenido proporcionado
+          // Crear el nombre del archivo con la extensión
+          const nombreArchivo = `${nombreDocumento}_${nroTramite}.${extension}`;
+
+          // Convertir el archivo de base64 a buffer
+          const buffer = Buffer.from(documento.contenido.data, 'base64');
+
+          const params = {
+            Bucket: 'haciendagesell',
+            Key: `mongo-backup/${nombreArchivo}`, // Usar el nombre con la extensión
+            Body: buffer,
+            ContentType: contentType,
+            // No es necesario usar ContentType aquí, ya que no lo estamos configurando explícitamente
           };
 
-          const buffer = Buffer.from(documento.contenido.data, 'base64'); // Convertir de base64 a buffer
+          try {
+            const data = await s3.upload(params).promise();
+            const fileUrl = data.Location; // URL pública del archivo subido
 
-          const nombreArchivo = `${nombreDocumento}_${nroTramite}`; // Agregar el número de trámite al nombre del archivo
-
-          const uploadStream = bucket.openUploadStream(nombreArchivo, options);
-          uploadStream.end(buffer);
-
-          const promise = new Promise((resolve, reject) => {
-            uploadStream.on('finish', async () => {
-              formData.documentos.documentos.push({
-                nombreDocumento: nombreDocumento,
-                contenido: uploadStream.id,
-              });
-              resolve();
+            formData.documentos.documentos.push({
+              nombreDocumento: nombreDocumento,
+              url: fileUrl,
             });
-            uploadStream.on('error', reject);
-          });
-
-          promises.push(promise);
+          } catch (error) {
+            console.error('Error subiendo archivo a S3:', error.message);
+            if (!res.headersSent) {
+              return res.status(500).json({
+                message: 'Error subiendo el archivo a S3.',
+              });
+            }
+          }
         }
       };
 
+      // Procesar todos los documentos
       for (const nombreDocumento in documentos) {
         if (documentos.hasOwnProperty(nombreDocumento)) {
           const documento = documentos[nombreDocumento];
-          agregarDocumento(documento.nombreDocumento, documento, nroTramite);
+          promises.push(agregarDocumento(documento.nombreDocumento, documento, nroTramite));
         }
       }
 
@@ -115,17 +138,24 @@ exports.add = async function (req, res) {
 
       formData.nroSolicitud = nroTramite;
       const createdHabilitacion = await HabilitacionService.create(formData);
-      return res.status(201).json({
-        message: 'Created',
-        data: nroTramite,
-      });
+
+      if (!res.headersSent) {
+        return res.status(201).json({
+          message: 'Habilitación creada con éxito.',
+          data: nroTramite,
+        });
+      }
     });
   } catch (e) {
-    return res.status(400).json({
-      message: e.message,
-    });
+    console.log('Error al crear habilitación:', e.message);
+    if (!res.headersSent) {
+      return res.status(400).json({
+        message: e.message,
+      });
+    }
   }
 };
+
 
 exports.update = async (req, res) => {
   try {
@@ -203,6 +233,7 @@ exports.getDocumentosById = async (req, res) => {
   try {
     const { id } = req.params;
     const habilitacion = await Habilitacion.findById(id).select('documentos');
+    const datosHab = await Habilitacion.findById(id).select('-documentos');
 
     if (!habilitacion) {
       return res.status(404).json({
@@ -211,34 +242,78 @@ exports.getDocumentosById = async (req, res) => {
     }
 
     const documentosArray = habilitacion.documentos.documentos;
-    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
-      bucketName: 'documentos',
-    });
-
     const documentosObtenidos = {};
 
-    // Usar un bucle for...of para asegurar sincronización
     for (const documento of documentosArray) {
-      const fileId = documento.contenido;
-      if (fileId && mongoose.Types.ObjectId.isValid(fileId)) {
-        const downloadStream = bucket.openDownloadStream(fileId);
-        const chunks = [];
+      try {
+        // Sanitización del nombre del archivo
+        const sanitizedNombre = documento.nombreDocumento
+        const altSanitizedNombre = documento.nombreDocumento?.replace(/\//g, '_') || 'archivo_desconocido';
 
-        await new Promise((resolve, reject) => {
-          downloadStream.on('data', chunk => chunks.push(chunk));
-          downloadStream.on('error', reject);
-          downloadStream.on('end', resolve);
-        });
+        // Agregar el número de trámite al nombre del archivo
+        const key = `mongo-backup/${sanitizedNombre}_${datosHab.nroSolicitud || 'tramite_desconocido'}`;
 
-        const buffer = Buffer.concat(chunks);
-        const file = await bucket.find({ _id: mongoose.Types.ObjectId(fileId) }).next();
-        if (file) {
-          documentosObtenidos[documento.nombreDocumento] = {
-            contentType: file.contentType,
-            data: buffer.toString('base64'), // Codificar en base64 aquí
-            filename: file.filename,
-          };
+        console.log('Buscando archivo en S3 con la clave:', key);
+
+        // Buscar archivos que coincidan con el prefijo
+        const listResponse = await s3.listObjectsV2({
+          Bucket: 'haciendagesell',
+          Prefix: key,
+        }).promise();
+
+        var newListResponse = null
+        var data = null
+
+        if (!listResponse.Contents || listResponse.Contents.length === 0) {
+          // Agregar el número de trámite al nombre del archivo
+          const newKey = `mongo-backup/${altSanitizedNombre}_${datosHab.nroSolicitud || 'tramite_desconocido'}`;
+          console.log('Buscando archivo en S3 con la clave:', newKey);
+
+          // Buscar archivos que coincidan con el prefijo
+          newListResponse = await s3.listObjectsV2({
+            Bucket: 'haciendagesell',
+            Prefix: newKey,
+          }).promise();
+
+          if(!newListResponse.Contents || newListResponse.Contents.length === 0){
+            throw new Error(`No se encontraron archivos para el prefijo: ${key} ni para ${newKey}`);
+          }
         }
+
+        // Tomar el primer archivo que coincida
+        if(listResponse.Contents.length > 0){
+          const fileKey = listResponse.Contents[0].Key;
+          console.log('Archivo encontrado:', fileKey);
+          // Descargar el archivo desde S3
+          data = await s3.getObject({
+            Bucket: 'haciendagesell',
+            Key: fileKey,
+          }).promise();
+        }else if(newListResponse.Contents.length > 0){
+          const newFileKey = newListResponse.Contents[0].Key;
+          console.log('Archivo encontrado', newFileKey);
+          // Descargar el archivo desde S3
+          data = await s3.getObject({
+            Bucket: 'haciendagesell',
+            Key: newFileKey,
+          }).promise();
+        }
+
+        // Extraer la extensión del archivo desde el nombre
+        const extension = key.split('.').pop() || 'bin';
+
+        documentosObtenidos[documento.nombreDocumento] = {
+          contentType: data.ContentType,
+          data: data.Body.toString('base64'),
+          filename: `${documento.nombreDocumento}.${extension}`, // Agregar la extensión al nombre del archivo
+        };
+      } catch (error) {
+        console.error(`Error descargando archivo desde S3 para documento ${documento.nombreDocumento}:`, error.message);
+
+        // Manejo de errores si no se encuentra el archivo
+        documentosObtenidos[documento.nombreDocumento] = {
+          error: `Archivo no encontrado en S3.`,
+        };
       }
     }
 
@@ -251,6 +326,7 @@ exports.getDocumentosById = async (req, res) => {
     });
   }
 };
+
 
 exports.getByNroTramite = async function (req, res) {
   try {
@@ -294,6 +370,8 @@ exports.getByTipoSolicitud = async function (req, res) {
   }
 };
 
+/* se usó una sola vez para mantener la referencia de los documentos cambiando de model.
+   actualmente los documentos están en amazon s3, y esto dejaría de servir.
 exports.migrarHabilitacion = async function (req, res) {
   try {
     const { id } = req.params;
@@ -349,8 +427,9 @@ exports.migrarHabilitacion = async function (req, res) {
          message: 'Error en la migración:' + String(error)
       })
   }
-};
+};*/
 
+//to do: modificarlo para funcionar con s3
 exports.deleteDocumentosById = async function (req, res) {
   try {
     const { id } = req.params; // Obtén el ID de la habilitación que deseas eliminar los documentos

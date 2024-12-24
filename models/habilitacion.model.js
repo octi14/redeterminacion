@@ -4,7 +4,8 @@ const documentoSchema = new Schema(
   {
     documentos: [{
       nombreDocumento: { type: String },
-      contenido: { type: Schema.Types.ObjectId }
+      contenido: { type: Schema.Types.ObjectId },
+      url: { type: String }, // Nuevo campo para almacenar la URL
     }]
   },
   { autoIndex: false } // Evitar que se generen índices automáticos
@@ -45,20 +46,6 @@ const inmuebleSchema = new Schema({
 
 const habilitacionSchema = new Schema({
   documentos: documentoSchema,
-  documentosAntiguos: {
-    planillaAutorizacion: { type: Schema.Types.ObjectId },
-    dniFrente: { type: Schema.Types.ObjectId },
-    dniDorso: { type: Schema.Types.ObjectId },
-    constanciaCuit: { type: Schema.Types.ObjectId },
-    constanciaIngresosBrutos: { type: Schema.Types.ObjectId },
-    actaPersonaJuridica: { type: Schema.Types.ObjectId },
-    actaDirectorio: { type: Schema.Types.ObjectId },
-    libreDeudaUrbana: { type: Schema.Types.ObjectId },
-    tituloPropiedad: { type: Schema.Types.ObjectId },
-    plano: { type: Schema.Types.ObjectId },
-    certificadoDomicilio: { type: Schema.Types.ObjectId },
-    croquis: { type: Schema.Types.ObjectId }
-  },
   solicitante: solicitanteSchema,
   inmueble: inmuebleSchema,
   status: {
