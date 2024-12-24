@@ -8,7 +8,7 @@ module.exports = {
   MONGO_URL: process.env.MONGO_URL,
   TOKEN_SECRET: process.env.TOKEN_SECRET || "secret",
   TOKEN_TIMEOUT: process.env.TOKEN_TIMEOUT || "48h",
-  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID || "AKIAQSOI4IMZLO524E5W",
-  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY || "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",
+  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID || "AKIAQSOI4IMZEPGEHTVB",
+  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY || "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",
   AWS_REGION: process.env.AWS_REGION || "us-east-2",
 };
