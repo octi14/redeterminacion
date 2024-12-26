@@ -53,6 +53,8 @@ exports.getAll = async function (req, res) {
   }
 };
 
+//esta operación crea una instancia de Habilitacion y guarda sus documentos en un bucket de amazon s3.
+//anteriormente guardaba los archivos en un bucket de mongoDB atlas
 exports.add = async function (req, res) {
   try {
     const upload = multer({
@@ -228,6 +230,7 @@ exports.getById = async function (req, res) {
   }
 };
 
+//esta operación se hacía sobre un bucket de mongoDB atlas, ahora funciona sobre un bucket de amazon s3
 exports.getDocumentosById = async (req, res) => {
   try {
     const { id } = req.params;
