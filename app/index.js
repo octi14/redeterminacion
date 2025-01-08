@@ -13,6 +13,7 @@ const HabilitacionRoute = require("../routes/habilitacion.route");
 const TurnoRoute = require('../routes/turno.route');
 const AbiertoAnualRoute = require ('../routes/abiertoAnual.route');
 const MaestroComercioRoute = require('../routes/maestroComercio.route');
+const userActivityRoute = require('../routes/userActivity.route');
 const FechaRoute = require('../routes/fecha.route');
 const app = express();
 
@@ -43,5 +44,6 @@ app.use("/turnos", TurnoRoute);
 app.use("/abiertoAnual", AbiertoAnualRoute);
 app.use("/maestro", MaestroComercioRoute);
 app.use("/fecha", FechaRoute);
+app.use("/api", userActivityRoute);
 
 module.exports = app;

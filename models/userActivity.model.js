@@ -1,19 +1,20 @@
-const { model, Schema } = require("mongoose");
-const User = require("./user.model");
+const mongoose = require('mongoose');
 
-const userActivitySchema = new Schema({
-    userId: { type: Schema.Types.ObjectId, ref: User, required: true },
+const userActivitySchema = new mongoose.Schema({
+    userId: { type: String, required: true },
     actionType: { type: String, required: true },
-    actionResult: { type: String },
-    sessionId: { type: String },
-    visitedUrl: { type: String },
+    actionResult: { type: String, required: true },
+    sessionId: { type: String, required: true },
+    visitedUrl: { type: String, required: true },
     deviceInfo: {
-      deviceType: { type: String },
-      os: { type: String },
-      resolution: { type: String },
-      browserInfo: { type: String }
+        deviceType: { type: String, required: true },
+        os: { type: String, required: true },
+        resolution: { type: String, required: true },
+        browserInfo: { type: String, required: true },
     },
-    timestamp: { type: Date, default: Date.now }
-  });
+    timestamp: { type: Date, default: Date.now },
+});
 
-module.exports = model('UserActivity', userActivitySchema);
+const UserActivity = mongoose.model('UserActivity', userActivitySchema);
+
+module.exports = UserActivity;
