@@ -1,6 +1,9 @@
 const express = require("express");
 const cors = require("cors");
 const jwt = require("../utils/jwt");
+const mongoose = require("mongoose"); // Importar Mongoose para conectar a la base de datos
+const { loadConfigs, getCachedConfig } = require("../services/configs.service"); // Importar funciones del servicio de configuraciones
+
 
 const UserRoute = require("../routes/user.route");
 const ObraRoute = require("../routes/obra.route");
@@ -13,8 +16,11 @@ const HabilitacionRoute = require("../routes/habilitacion.route");
 const TurnoRoute = require('../routes/turno.route');
 const AbiertoAnualRoute = require ('../routes/abiertoAnual.route');
 const MaestroComercioRoute = require('../routes/maestroComercio.route');
-const userActivityRoute = require('../routes/userActivity.route');
 const FechaRoute = require('../routes/fecha.route');
+
+const configRoutes = require('../routes/config.route');
+const userActivityRoute = require('../routes/userActivity.route');
+
 const app = express();
 
 app.use(cors());
@@ -26,10 +32,53 @@ app.use(express.urlencoded({ extended: true }));
 // Agregar el middleware para JWT
 app.use(jwt());
 
+// Conectar a la base de datos y cargar configuraciones globales
+(async () => {
+  try {
+    const mongoUrl = process.env.MONGO_URL; // Accede a la variable de entorno
+    if (!mongoUrl) {
+      throw new Error("La variable MONGO_URL no está configurada en el archivo .env");
+    }
+
+    await mongoose.connect(mongoUrl, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log('Conectado a la base de datos.');
+
+    // Cargar configuraciones globales en memoria
+    await loadConfigs();
+    console.log('Configuraciones globales cargadas.');
+
+    // Usar una configuración global como ejemplo
+    const maintenanceMode = getCachedConfig('maintenanceMode');
+    if (maintenanceMode) {
+      console.log('El modo de mantenimiento está activado.');
+    }
+  } catch (err) {
+    console.error('Error al iniciar el servidor:', err.message);
+    process.exit(1);
+  }
+})();
+
+// Rutas base
 app.get("/", (_req, res) => {
   res.status(200).json({
     message: "OK",
   });
+});
+
+// Middleware para verificar modo mantenimiento (opcional)
+app.use((req, res, next) => {
+  try {
+    const maintenanceMode = getCachedConfig('maintenanceMode');
+    if (maintenanceMode) {
+      return res.status(503).json({ message: "El sitio está en mantenimiento. Intente más tarde." });
+    }
+    next();
+  } catch (err) {
+    next(); // Si no se encuentra la configuración, continúa normalmente
+  }
 });
 
 app.use("/users", UserRoute);
@@ -45,5 +94,6 @@ app.use("/abiertoAnual", AbiertoAnualRoute);
 app.use("/maestro", MaestroComercioRoute);
 app.use("/fecha", FechaRoute);
 app.use("/api", userActivityRoute);
+app.use('/config', configRoutes);
 
 module.exports = app;

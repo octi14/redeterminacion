@@ -1,7 +1,12 @@
 const userActivityService = require('../services/userActivity.service'); // Importa el servicio
+const { getCachedConfig } = require('../services/configs.service');
 
 exports.createUserActivity = async (req, res) => {
     try {
+        const isFeatureEnabled = getCachedConfig('logActivityEnabled');
+        if (!isFeatureEnabled) {
+            return res.status(203).json({ message: 'Funcionalidad deshabilitada.' });
+        }
         const { userId, actionType, actionResult, sessionId, visitedUrl, deviceInfo } = req.body;
 
         // Crear un nuevo documento de actividad
