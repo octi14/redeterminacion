@@ -17,7 +17,6 @@ const TurnoRoute = require('../routes/turno.route');
 const AbiertoAnualRoute = require ('../routes/abiertoAnual.route');
 const MaestroComercioRoute = require('../routes/maestroComercio.route');
 const FechaRoute = require('../routes/fecha.route');
-
 const configRoutes = require('../routes/config.route');
 const userActivityRoute = require('../routes/userActivity.route');
 
