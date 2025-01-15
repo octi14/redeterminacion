@@ -38,3 +38,21 @@ exports.getConfigFromDB = async (key) => {
     throw err;
   }
 };
+
+exports.updateConfig = async (key, value, persist = false) => {
+  try {
+    // Actualiza la caché local
+    cachedConfigs[key] = value;
+
+    console.log(`Configuración actualizada en caché: ${key} = ${value}`);
+
+    if (persist) {
+      // También persiste el cambio en la base de datos
+      await Config.updateOne({ key }, { value }, { upsert: true });
+      console.log(`Configuración persistida en la base de datos: ${key} = ${value}`);
+    }
+  } catch (err) {
+    console.error('Error al actualizar configuración:', err.message);
+    throw err;
+  }
+};
