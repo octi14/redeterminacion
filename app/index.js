@@ -19,6 +19,8 @@ const MaestroComercioRoute = require('../routes/maestroComercio.route');
 const FechaRoute = require('../routes/fecha.route');
 const configRoutes = require('../routes/config.route');
 const userActivityRoute = require('../routes/userActivity.route');
+const ordenCompraRoute = require('../routes/ordenCompra.route');
+
 
 const app = express();
 
@@ -83,5 +85,6 @@ app.use("/maestro", MaestroComercioRoute);
 app.use("/fecha", FechaRoute);
 app.use("/api", userActivityRoute);
 app.use('/config', configRoutes);
+app.use("/ordenesCompra", ordenCompraRoute);
 
 module.exports = app;
