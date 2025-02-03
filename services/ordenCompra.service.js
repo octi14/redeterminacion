@@ -1,4 +1,5 @@
 let OrdenCompra = require("../models/ordenCompra.model");
+let mongoose = require('mongoose');
 
 exports.findAll = async function () {
   try {
@@ -22,15 +23,20 @@ exports.update = async function (id, update) {
 };
 
 exports.getById = async function (id) {
-  return OrdenCompra.findById(id);
+  return await OrdenCompra.findById(id);
 };
 
 exports.delete = async function (id) {
   return OrdenCompra.deleteOne({ _id: id });
 };
 
-exports.getByCategoria = async function (categoria) {
-  return OrdenCompra.find({ categoria: categoria });
+exports.findByValeId = async function (valeId) {
+  try {
+    const objectIdVale = new mongoose.Types.ObjectId(valeId); // Convertimos el ID a ObjectId
+    return await OrdenCompra.findOne({ vales: objectIdVale });
+  } catch (error) {
+    throw new Error("Error al buscar la orden de compra por ID de vale: " + error.message);
+  }
 };
 
 exports.getOrCreate = async function (name) {

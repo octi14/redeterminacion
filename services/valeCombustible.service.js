@@ -1,38 +1,14 @@
 let ValeCombustible = require("../models/valeCombustible.model");
 let OrdenCompra = require("../models/ordenCompra.model");  // Importar el modelo de OrdenCompra
 
-exports.create = async function (formData) {
+exports.create = async function (valeData) {
   try {
-    // Buscar la orden de compra a la que pertenece el vale
-    const ordenCompra = await OrdenCompra.findById(formData.ordenCompraId);
-
-    if (!ordenCompra) {
-      throw new Error("Orden de compra no encontrada.");
-    }
-
-    // El número de vale será el tamaño del array de vales + 1
-    const nroVale = ordenCompra.vales.length + 1;
-
-    // Crear el nuevo vale de combustible con los datos recibidos y el nroVale calculado
-    const nuevoValeCombustible = new ValeCombustible({
-      nroVale: nroVale,
-      ordenCompra: formData.ordenCompraId,
-      fecha: formData.fecha,
-      monto: formData.monto,
-      estado: formData.estado || 'Pendiente',  // Si no se pasa estado, se asigna 'Pendiente'
-      observaciones: formData.observaciones || '',
-    });
-
-    // Guardar el nuevo vale de combustible
-    const createdValeCombustible = await nuevoValeCombustible.save();
-
-    // Luego, agregar el ID del nuevo vale al array de vales de la orden de compra
-    ordenCompra.vales.push(createdValeCombustible._id);
-    await ordenCompra.save();  // Guardamos la orden de compra con el nuevo vale
-
-    return createdValeCombustible;
+    const nuevoVale = new ValeCombustible(valeData);
+    const createdVale = await nuevoVale.save();
+    return createdVale;
   } catch (e) {
-    throw new Error('No se pudo crear el vale de combustible. Detalles del error: ' + e.message);
+    console.error("Error al crear el vale de combustible:", e);
+    throw new Error("Error al crear el vale de combustible.");
   }
 };
 
@@ -45,6 +21,16 @@ exports.findAll = async function () {
     throw new Error("Error al obtener los vales de combustible.");
   }
 };
+
+exports.findByOrdenId = async function (id) {
+  try {
+    return await ValeCombustible.find({ orden: id });
+  } catch (e) {
+    console.error(e);
+    throw new Error("Error al obtener los vales de la orden.");
+  }
+};
+
 
 exports.update = async function (id, update) {
   try {
