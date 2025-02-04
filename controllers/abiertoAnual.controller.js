@@ -37,12 +37,10 @@ exports.addDocument = async function(req, res) {
 
     upload.single('factura')(req, res, async function(err) {
       if (err instanceof multer.MulterError) {
-        console.log('Error de Multer:', err);
         return res.status(400).json({
           message: 'Error al cargar el archivo.',
         });
       } else if (err) {
-        console.log('Error:', err);
         return res.status(500).json({
           message: 'Error interno del servidor.',
         });
@@ -255,8 +253,6 @@ exports.update = async (req, res) => {
     const { id } = req.params; // Suponiendo que proporcionas el ID del documento a actualizar en los parámetros de la solicitud.
     const camposActualizados = req.body; // Suponiendo que envías los campos actualizados en el cuerpo de la solicitud.
 
-    console.log("Intentando actualizar un documento reemplazándolo por este objeto: " + camposActualizados );
-
     // Encontrar el documento por ID y actualizarlo
     const documentoActualizado = await AbiertoAnualService.update(
       id,
@@ -293,7 +289,6 @@ exports.deleteFacturasById = async function (req, res) {
     }
 
     const facturas = tramite.facturas.toObject(); // Convierte a un objeto Mongoose
-    console.log(facturas);
 
     // Accede al bucket de GridFS
     const bucket = new GridFSBucket(mongoose.connection.db, {
@@ -318,8 +313,6 @@ exports.deleteFacturasById = async function (req, res) {
     // Espera a que todas las eliminaciones se completen antes de responder
 
     await Promise.all(promises);
-
-    console.log(facturas);
 
     // Actualiza la referencia de documentos en la instancia de habilitacion
     tramite.facturas = facturas;

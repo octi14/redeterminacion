@@ -7,6 +7,6 @@ const ValeCombustibleController = require("../controllers/valeCombustible.contro
 router.get("/", ValeCombustibleController.getAll);
 router.post("/", ValeCombustibleController.add);
 router.post("/single", ValeCombustibleController.getAllByOrden);
-// router.put("/:id", ValeCombustibleController.update);
+router.put("/:id", ValeCombustibleController.update);
 router.delete("/:id", ValeCombustibleController.delete);
 module.exports = router;

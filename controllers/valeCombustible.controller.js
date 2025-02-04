@@ -43,7 +43,6 @@ exports.add = async function (req, res) {
     const ordenCompra = await OrdenCompra.findById(orden);
 
     if (ordenCompra == null) { // Evalúa null y undefined
-      console.log("❌ ERROR: Se consideró que la orden no existe.");
       return res.status(404).json({ message: "Orden de compra no encontrada" });
     }
 
@@ -70,7 +69,7 @@ exports.add = async function (req, res) {
         } else {
           return res.status(400).json({ message: "Saldo insuficiente para el tipo de combustible Super." });
         }
-      } else if (tipoCombustible === 'V-Power') {
+      } else if (tipoCombustible === 'V-Power Diesel') {
         if (ordenCompra.saldoRestante.saldoVPower >= monto) {
           ordenCompra.saldoRestante.saldoVPower -= monto;
         } else {
@@ -93,11 +92,9 @@ exports.add = async function (req, res) {
 
     // Guardar la orden con los nuevos vales y la observación
     try {
-      console.log("💾 Guardando ordenCompra con los nuevos vales y la observación...");
       ordenCompra.markModified('vales');
       ordenCompra.markModified('observaciones');
       await ordenCompra.save();
-      console.log("✅ Orden guardada correctamente.");
     } catch (err) {
       console.error("🔥 Error al guardar la orden:", err);
       return res.status(500).json({ message: "Error al guardar la orden de compra." });
@@ -115,6 +112,38 @@ exports.add = async function (req, res) {
   }
 };
 
+exports.update = async function (req, res) {
+  try {
+    // TODO: validate req.params and req.body
+    const { id } = req.params;
+    const {
+      orden,
+      monto,
+      tipoCombustible,
+      area,
+      fechaEmision,
+      consumido,
+    } = req.body.vale;
+
+    const updated = await ValeCombustibleService.update(id, {
+      orden: orden,
+      monto: monto,
+      tipoCombustible: tipoCombustible,
+      area: area,
+      fechaEmision: fechaEmision,
+      consumido: consumido,
+    });
+
+    return res.status(200).json({
+      message: "Vale modificado.",
+      data: updated,
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
 
 
 // Eliminar un vale de combustible

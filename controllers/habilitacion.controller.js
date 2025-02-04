@@ -66,14 +66,12 @@ exports.add = async function (req, res) {
 
     upload.array('archivo', 10)(req, res, async function (err) {
       if (err instanceof multer.MulterError) {
-        console.log('Error de Multer:', err);
         if (!res.headersSent) {
           return res.status(400).json({
             message: 'Error al cargar el archivo.',
           });
         }
       } else if (err) {
-        console.log('Error:', err);
         if (!res.headersSent) {
           return res.status(500).json({
             message: 'Error interno del servidor.',
@@ -148,7 +146,6 @@ exports.add = async function (req, res) {
       }
     });
   } catch (e) {
-    console.log('Error al crear habilitación:', e.message);
     if (!res.headersSent) {
       return res.status(400).json({
         message: e.message,
@@ -255,8 +252,6 @@ exports.getDocumentosById = async (req, res) => {
         // Agregar el número de trámite al nombre del archivo
         const key = `mongo-backup/${sanitizedNombre}_${datosHab.nroSolicitud || 'tramite_desconocido'}`;
 
-        console.log('Buscando archivo en S3 con la clave:', key);
-
         // Buscar archivos que coincidan con el prefijo
         const listResponse = await s3.listObjectsV2({
           Bucket: 'haciendagesell',
@@ -269,7 +264,6 @@ exports.getDocumentosById = async (req, res) => {
         if (!listResponse.Contents || listResponse.Contents.length === 0) {
           // Agregar el número de trámite al nombre del archivo
           const newKey = `mongo-backup/${altSanitizedNombre}_${datosHab.nroSolicitud || 'tramite_desconocido'}`;
-          console.log('Buscando archivo en S3 con la clave:', newKey);
 
           // Buscar archivos que coincidan con el prefijo
           newListResponse = await s3.listObjectsV2({
@@ -285,7 +279,6 @@ exports.getDocumentosById = async (req, res) => {
         // Tomar el primer archivo que coincida
         if(listResponse.Contents.length > 0){
           const fileKey = listResponse.Contents[0].Key;
-          console.log('Archivo encontrado:', fileKey);
           // Descargar el archivo desde S3
           data = await s3.getObject({
             Bucket: 'haciendagesell',
@@ -293,7 +286,6 @@ exports.getDocumentosById = async (req, res) => {
           }).promise();
         }else if(newListResponse.Contents.length > 0){
           const newFileKey = newListResponse.Contents[0].Key;
-          console.log('Archivo encontrado', newFileKey);
           // Descargar el archivo desde S3
           data = await s3.getObject({
             Bucket: 'haciendagesell',
@@ -380,7 +372,6 @@ exports.migrarHabilitacion = async function (req, res) {
     const habilitacion = await Habilitacion.findById(id).select('documentos');
 
     if (!habilitacion) {
-      console.log('Habilitación no encontrada');
       return;
     }
 
@@ -440,7 +431,6 @@ exports.deleteDocumentosById = async function (req, res) {
     try{
       habilitacion = await Habilitacion.findById(new mongoose.Types.ObjectId(id)).select("documentos").exec();
     } catch(e) {
-      console.log("Algo está mal con el ID.");
       return res.status(400).json({
         message: e.message,
       });
@@ -453,7 +443,6 @@ exports.deleteDocumentosById = async function (req, res) {
     }
 
     const documentos = habilitacion.documentos.documentos.toObject(); // Convierte a un objeto Mongoose
-    console.log(documentos);
 
     // Accede al bucket de GridFS
     const bucket = new GridFSBucket(mongoose.connection.db, {
@@ -475,8 +464,6 @@ exports.deleteDocumentosById = async function (req, res) {
 
     // Espera a que todas las eliminaciones se completen antes de responder
     await Promise.all(promises);
-
-    console.log(documentos);
 
     // Actualiza la referencia de documentos en la instancia de habilitacion
     habilitacion.documentos.documentos = documentos;
