@@ -15,24 +15,22 @@ exports.getAll = async function (req, res) {
   }
 };
 
-//Crear orden de compra
+// Crear orden de compra
 exports.add = async function (req, res) {
   try {
     // Extraer datos del cuerpo del request
-    const { nroOrden, area, montoSuper, montoVPower } = req.body.orden;
+    const { nroOrden, area, proveedor, montos } = req.body.orden; // Se espera que 'montos' sea un array de objetos con { tipoCombustible, monto }
 
-    // Preparar los datos para la nueva orden
+    // Construir los datos para la nueva orden
     const ordenData = {
       nroOrden,
       area,
-      monto: {
-        montoSuper,
-        montoVPower,
-      },
-      saldoRestante: {
-        saldoSuper: montoSuper, // Mismo valor inicial que montoSuper
-        saldoVPower: montoVPower, // Mismo valor inicial que montoVPower
-      },
+      proveedor,
+      monto: montos, // Se usa directamente el array de montos recibido
+      saldoRestante: montos.map(({ tipoCombustible, monto }) => ({
+        tipoCombustible,
+        saldo: monto, // Inicialmente el saldo restante es igual al monto
+      })),
       observaciones: [], // Se inicializa como un array vacío
     };
 
@@ -52,14 +50,16 @@ exports.add = async function (req, res) {
   }
 };
 
-//Actualizar orden de compra
+// Actualizar orden de compra
 exports.update = async function (req, res) {
   try {
     // Extraer el ID de la orden a actualizar desde los parámetros de la URL
     const { id } = req.params;
 
     // Extraer los datos del cuerpo del request
-    const { valeId, saldoSuperRestado, saldoVPowerRestado, monto } = req.body;
+    const { valeId, saldoRestado, montos } = req.body;
+    // saldoRestado debería ser un array de objetos con { tipoCombustible, saldoRestado }
+    // montos debería ser un array de objetos con { tipoCombustible, monto }
 
     // Buscar la orden de compra existente
     const ordenCompra = await OrdenCompraService.findById(id);
@@ -72,18 +72,27 @@ exports.update = async function (req, res) {
       ordenCompra.vales.push(valeId);
     }
 
-    // Restar el saldo especificado de saldoSuper y saldoVPower
-    if (saldoSuperRestado) {
-      ordenCompra.saldoRestante.saldoSuper -= saldoSuperRestado;
-    }
-    if (saldoVPowerRestado) {
-      ordenCompra.saldoRestante.saldoVPower -= saldoVPowerRestado;
+    // Restar el saldo correspondiente a cada tipo de combustible
+    if (saldoRestado && Array.isArray(saldoRestado)) {
+      saldoRestado.forEach(({ tipoCombustible, saldoRestado }) => {
+        const saldo = ordenCompra.saldoRestante.find(s => s.tipoCombustible === tipoCombustible);
+        if (saldo) {
+          saldo.saldo -= saldoRestado;
+        }
+      });
     }
 
-    // Actualizar el objeto monto si se proporciona
-    if (monto) {
-      ordenCompra.monto.montoSuper = monto.montoSuper ?? ordenCompra.monto.montoSuper;
-      ordenCompra.monto.montoVPower = monto.montoVPower ?? ordenCompra.monto.montoVPower;
+    // Actualizar los montos si se proporcionan
+    if (montos && Array.isArray(montos)) {
+      montos.forEach(({ tipoCombustible, monto }) => {
+        const montoObj = ordenCompra.monto.find(m => m.tipoCombustible === tipoCombustible);
+        if (montoObj) {
+          montoObj.monto = monto;
+        } else {
+          // Si no existe, se agrega un nuevo tipo de combustible con su monto
+          ordenCompra.monto.push({ tipoCombustible, monto });
+        }
+      });
     }
 
     // Guardar los cambios en la base de datos
@@ -101,6 +110,7 @@ exports.update = async function (req, res) {
     });
   }
 };
+
 
 exports.delete = async function (req, res) {
   try {

@@ -33,7 +33,7 @@ exports.getAll = async function (req, res){
 exports.add = async function (req, res) {
   try {
     // Extraer los datos del cuerpo del request
-    const { orden, monto, tipoCombustible, area, cantidad } = req.body.payload;
+    const { orden, monto, tipoCombustible, area, proveedor, cantidad } = req.body.payload;
 
     if (!cantidad || cantidad < 1) {
       return res.status(400).json({ message: "La cantidad debe ser al menos 1." });
@@ -54,6 +54,7 @@ exports.add = async function (req, res) {
         monto,
         tipoCombustible,
         area,
+        proveedor,
         fechaEmision: new Date(), // Fecha actual
         consumido: false, // Siempre false al crearlo
       };
@@ -63,20 +64,12 @@ exports.add = async function (req, res) {
       valesCreados.push(createdVale);
 
       // Descontar el saldo correspondiente según el tipo de combustible
-      if (tipoCombustible === 'Super') {
-        if (ordenCompra.saldoRestante.saldoSuper >= monto) {
-          ordenCompra.saldoRestante.saldoSuper -= monto;
-        } else {
-          return res.status(400).json({ message: "Saldo insuficiente para el tipo de combustible Super." });
-        }
-      } else if (tipoCombustible === 'V-Power Diesel') {
-        if (ordenCompra.saldoRestante.saldoVPower >= monto) {
-          ordenCompra.saldoRestante.saldoVPower -= monto;
-        } else {
-          return res.status(400).json({ message: "Saldo insuficiente para el tipo de combustible V-Power." });
-        }
+      const saldo = ordenCompra.saldoRestante.find(s => s.tipoCombustible === tipoCombustible);
+
+      if (saldo && saldo.saldo >= monto) {
+        saldo.saldo -= monto;
       } else {
-        return res.status(400).json({ message: "Tipo de combustible no válido." });
+        return res.status(400).json({ message: `Saldo insuficiente para el tipo de combustible ${tipoCombustible}.` });
       }
     }
 
