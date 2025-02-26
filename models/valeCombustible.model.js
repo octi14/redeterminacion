@@ -5,9 +5,10 @@ const valeCombustibleSchema = new Schema({
     monto: { type: Number },
     tipoCombustible: { type: String },
     area: { type: String },
+    dominio: {type: String},
     fechaEmision: { type: Date },
     consumido: { type: Boolean },
-}, 
+},
 {
     timestamps: true, // Agrega createdAt y updatedAt automáticamente
 });

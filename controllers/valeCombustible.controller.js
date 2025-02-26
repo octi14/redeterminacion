@@ -33,7 +33,7 @@ exports.getAll = async function (req, res){
 exports.add = async function (req, res) {
   try {
     // Extraer los datos del cuerpo del request
-    const { orden, monto, tipoCombustible, area, proveedor, cantidad } = req.body.payload;
+    const { orden, monto, tipoCombustible, area, dominio, proveedor, cantidad } = req.body.payload;
 
     if (!cantidad || cantidad < 1) {
       return res.status(400).json({ message: "La cantidad debe ser al menos 1." });
@@ -54,6 +54,7 @@ exports.add = async function (req, res) {
         monto,
         tipoCombustible,
         area,
+        dominio,
         proveedor,
         fechaEmision: new Date(), // Fecha actual
         consumido: false, // Siempre false al crearlo
@@ -114,6 +115,7 @@ exports.update = async function (req, res) {
       monto,
       tipoCombustible,
       area,
+      dominio,
       fechaEmision,
       consumido,
     } = req.body.vale;
@@ -123,6 +125,7 @@ exports.update = async function (req, res) {
       monto: monto,
       tipoCombustible: tipoCombustible,
       area: area,
+      dominio: dominio,
       fechaEmision: fechaEmision,
       consumido: consumido,
     });
