@@ -21,6 +21,8 @@ const configRoutes = require('../routes/config.route');
 const userActivityRoute = require('../routes/userActivity.route');
 const ordenCompraRoute = require('../routes/ordenCompra.route');
 const valeCombustibleRoute = require('../routes/valeCombustible.route');
+const proveedorRoute = require('../routes/proveedor.route');
+
 
 const app = express();
 
@@ -87,5 +89,6 @@ app.use("/api", userActivityRoute);
 app.use('/config', configRoutes);
 app.use("/ordenesCompra", ordenCompraRoute);
 app.use("/valesCombustible", valeCombustibleRoute);
+app.use("/proveedores", proveedorRoute);
 
 module.exports = app;
