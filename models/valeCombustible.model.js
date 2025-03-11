@@ -1,6 +1,7 @@
 const { Schema, model } = require('mongoose');
 
 const valeCombustibleSchema = new Schema({
+    nro_vale: { type: Number, required: true },
     orden: { type: Schema.Types.ObjectId },
     monto: { type: Number },
     tipoCombustible: { type: String },

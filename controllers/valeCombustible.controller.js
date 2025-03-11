@@ -46,10 +46,13 @@ exports.add = async function (req, res) {
       return res.status(404).json({ message: "Orden de compra no encontrada" });
     }
 
+    let cant_vales = Array.isArray(ordenCompra.vales) ? ordenCompra.vales.length : 0;
+
     // Crear múltiples vales según la cantidad especificada
     const valesCreados = [];
     for (let i = 0; i < cantidad; i++) {
       const valeData = {
+        nro_vale: cant_vales + i + 1,
         orden,
         monto,
         tipoCombustible,
@@ -90,7 +93,6 @@ exports.add = async function (req, res) {
       ordenCompra.markModified('observaciones');
       await ordenCompra.save();
     } catch (err) {
-      console.error("🔥 Error al guardar la orden:", err);
       return res.status(500).json({ message: "Error al guardar la orden de compra." });
     }
 
