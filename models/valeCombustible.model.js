@@ -9,6 +9,7 @@ const valeCombustibleSchema = new Schema({
     dominio: {type: String},
     fechaEmision: { type: Date },
     consumido: { type: Boolean },
+    anulado: { type: Boolean },
 },
 {
     timestamps: true, // Agrega createdAt y updatedAt automáticamente

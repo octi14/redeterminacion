@@ -181,6 +181,56 @@ exports.delete = async function (req, res) {
   }
 };
 
+// Anular un vale de combustible y devolver saldo a la orden de compra
+exports.anular = async function (req, res) {
+  try {
+    const { id } = req.params; // ID del vale
+    const { ordenId } = req.body; // ID de la orden (opcional)
+
+    // Buscar el vale de combustible
+    const vale = await ValeCombustibleService.getById(id);
+    if (!vale) {
+      return res.status(404).json({ message: "Vale de combustible no encontrado" });
+    }
+
+    if (vale.consumido) {
+      return res.status(400).json({ message: "El vale ya fue consumido, no se puede anular" });
+    }
+
+    // Marcar el vale como no consumido (disponible)
+    vale.anulado = true;
+    await vale.save();
+
+    // Buscar la orden de compra asociada
+    let ordenCompra;
+    ordenCompra = await OrdenCompraService.findByValeId(id);
+
+    if (ordenCompra) {
+      // Buscar el saldo restante correspondiente al tipo de combustible del vale
+      const saldoIndex = ordenCompra.saldoRestante.findIndex(s => s.tipoCombustible === vale.tipoCombustible);
+
+      if (saldoIndex !== -1) {
+        // Si existe, sumamos el monto al saldo correspondiente
+        ordenCompra.saldoRestante[saldoIndex].saldo += vale.monto;
+        await ordenCompra.save();
+      } else {
+        // Si no existe, lanzar un error
+        return res.status(400).json({
+          message: `No se encontró saldo disponible para el tipo de combustible "${vale.tipoCombustible}" en esta orden de compra.`,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      message: "Vale de combustible anulado correctamente. Saldo devuelto a la orden de compra.",
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message || "Ocurrió un error al anular el vale de combustible.",
+    });
+  }
+};
+
 
 // Obtener un vale de combustible por su ID
 exports.getById = async function (req, res) {
