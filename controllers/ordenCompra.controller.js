@@ -1,4 +1,5 @@
 let OrdenCompraService = require("../services/ordenCompra.service");
+let ValeCombustibleService = require("../services/valeCombustible.service");
 
 //Obtener todas las órdenes de compra
 exports.getAll = async function (req, res) {
@@ -114,9 +115,17 @@ exports.update = async function (req, res) {
 
 exports.delete = async function (req, res) {
   try {
-    // TODO: validate req.params
     const { id } = req.params;
 
+    // Obtener la orden con sus vales
+    const orden = await OrdenCompraService.getById(id);
+
+    // Borrar cada vale asociado
+    for (const vale of orden.vales) {
+      await ValeCombustibleService.delete(vale._id);
+    }
+
+    // Borrar la orden de compra
     await OrdenCompraService.delete(id);
 
     return res.status(200).json({
@@ -128,6 +137,7 @@ exports.delete = async function (req, res) {
     });
   }
 };
+
 
 exports.getById = async function (req, res) {
   try {

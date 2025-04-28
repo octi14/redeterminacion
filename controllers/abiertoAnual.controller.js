@@ -5,6 +5,8 @@ const { GridFsStorage } = require('multer-gridfs-storage');
 const { GridFSBucket } = require('mongodb');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
+const AWS = require('aws-sdk');
+
 // Configuración de GridFsStorage para guardar en un bucket 'facturas'
 const storage = new GridFsStorage({
   url: 'mongodb+srv://octi14:octavio14@tiendacluster.1zpsi.mongodb.net/test?authSource=admin&replicaSet=atlas-7lljh4-shard-0&readPreference=primary&ssl=true', // Reemplaza por la URL de tu base de datos
@@ -22,91 +24,77 @@ const upload = multer({
   limits: { fileSize: 48 * 1024 * 1024 } // Limita el tamaño del archivo a 5MB
 });
 
-// Ejemplo de método para añadir un documento a un registro de AbiertoAnual
-exports.addDocument = async function(req, res) {
-    try {
-    const upload = multer({
-      storage, // Utiliza el almacenamiento de GridFS configurado previamente
-      limits: {
-        fileSize: 48 * 1024 * 1024, // 5 MB
-      },
-    });
+// Configuración AWS SDK
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID, // definilo en tu .env
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY, // definilo en tu .env
+  region: process.env.AWS_REGION, // o la que estés usando
+});
 
+// Método para añadir documento a AbiertoAnual y guardarlo en S3
+exports.addDocument = async function (req, res) {
+  try {
     const { id } = req.params;
-    const { periodo } = req.body; // ID del registro AbiertoAnual y posición en el array
+    const { periodo } = req.body;
+    const documento = req.body.factura;
 
-    upload.single('factura')(req, res, async function(err) {
-      if (err instanceof multer.MulterError) {
-        return res.status(400).json({
-          message: 'Error al cargar el archivo.',
-        });
-      } else if (err) {
-        return res.status(500).json({
-          message: 'Error interno del servidor.',
-        });
-      }
-      const abiertoAnual = await AbiertoAnual.findById(id);
-      if (!abiertoAnual) {
-        return res.status(404).json({ message: 'Registro no encontrado' });
-      }
+    if (!documento || !documento.contenido || !documento.contenido.data || !documento.contenido.contentType) {
+      return res.status(400).json({ message: 'Faltan datos del documento' });
+    }
 
-    // Si ya hay un documento en la posición especificada, eliminarlo del bucket
-    if (abiertoAnual.facturas && abiertoAnual.facturas[periodo]) {
-      const bucket = new GridFSBucket(mongoose.connection.db, {
-        bucketName: 'facturas',
-      });
-      if(abiertoAnual.facturas[periodo].contenido){
-        try{
-          await bucket.delete(abiertoAnual.facturas[periodo].contenido);
-        }catch(e){
-          //si no hay o no se pudo encontrar, continuar
-          console.log("Hubo un error eliminando el archivo. Continuando...");
-        }
+    // Buscar el registro
+    const abiertoAnual = await AbiertoAnual.findById(id);
+    if (!abiertoAnual) {
+      return res.status(404).json({ message: 'Registro no encontrado' });
+    }
+
+    // Si ya hay un documento cargado en esa posición, lo eliminamos de S3
+    if (abiertoAnual.facturas && abiertoAnual.facturas[periodo] && abiertoAnual.facturas[periodo].url) {
+      const keyAnterior = abiertoAnual.facturas[periodo].url.split('/').pop();
+      const paramsDelete = {
+        Bucket: 'haciendagesell',
+        Key: `abierto-anual/${keyAnterior}`
+      };
+      try {
+        await s3.deleteObject(paramsDelete).promise();
+      } catch (err) {
+        console.log('No se pudo eliminar archivo anterior de S3:', err.message);
       }
     }
 
-      const promises = [];
+    // Armar el nuevo archivo
+    const cuit = abiertoAnual.cuit? abiertoAnual.cuit : '';
+    const nroLegajo = abiertoAnual.nroLegajo;
+    const contentType = documento.contenido.contentType;
+    const extension = contentType.split('/')[1]; // Ejemplo: 'pdf'
+    // Crear el nombre de archivo usando la estructura proporcionada
+    const nombreArchivo = `abierto-anual/${cuit}_${nroLegajo}_${periodo}.${extension}`;
+    const buffer = Buffer.from(documento.contenido.data, 'base64');
 
-      // Subir el archivo al bucket 'facturas'
-      const bucket = new GridFSBucket(mongoose.connection.db, {
-        bucketName: 'facturas',
-      });
-
-      const options = {
-        contentType: req.body.factura.contenido.contentType, // Usar el tipo de contenido proporcionado
-      };
-
-    // Convertir el archivo a un buffer desde base64
-    const buffer = Buffer.from(req.body.factura.contenido.data, 'base64');
-
-      const nombreArchivo = `${id}_${periodo}`; // Utilizar el ID de la factura y el periodo para formar el nombre del archivo
-
-      const uploadStream = bucket.openUploadStream(nombreArchivo, options);
-      uploadStream.end(buffer);
-
-      // Esperar a que se complete la subida del archivo
-      await new Promise((resolve, reject) => {
-        uploadStream.on('finish', resolve);
-        uploadStream.on('error', reject);
-      });
-
-      // Actualizar el array de facturas en la posición especificada con el ID del archivo subido
-      abiertoAnual.facturas[periodo] = {
-        contenido: uploadStream.id // Guarda el ID del archivo subido
-      };
-
-      // Actualizar fechasCarga y status
-      abiertoAnual.fechasCarga[periodo] = new Date();
-      abiertoAnual.status[periodo] = "En revisión";
-
-      await abiertoAnual.save();
-      res.status(201).json({ message: 'Factura añadida correctamente'});
-    })} catch (e) {
-      res.status(400).json({ message: e.message });
+    const paramsUpload = {
+      Bucket: 'haciendagesell',
+      Key: nombreArchivo, // Ruta con la carpeta 'abierto-anual/'
+      Body: buffer,
+      ContentType: contentType,
     };
+
+    const uploadResult = await s3.upload(paramsUpload).promise();
+
+    // Guardar en la base de datos
+    abiertoAnual.facturas[periodo] = {
+      url: uploadResult.Location
+    };
+    abiertoAnual.fechasCarga[periodo] = new Date();
+    abiertoAnual.status[periodo] = 'En revisión';
+
+    await abiertoAnual.save();
+
+    return res.status(201).json({ message: 'Factura subida correctamente.' });
+  } catch (error) {
+    console.error('Error al subir factura:', error);
+    return res.status(500).json({ message: 'Error al subir la factura.' });
+  }
 };
-
-
 
 exports.getAll = async function (req, res) {
   try {
@@ -179,62 +167,55 @@ exports.getByCuitLegajo = async function (req, res) {
   }
 };
 
-
-
 exports.getFacturasById = async (req, res) => {
   try {
     const { id } = req.params;
-    const tramite = await AbiertoAnual.findById(id);
+    const tramite = await AbiertoAnual.findById(id).select('facturas');
+    const datosTramite = await AbiertoAnual.findById(id).select('-facturas');
 
     if (!tramite) {
       return res.status(404).json({
-        message: 'Habilitación no encontrada.',
+        message: 'Trámite no encontrado.',
       });
     }
 
-    const documentosArray = tramite.facturas;
-    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
-      bucketName: 'facturas',
-    });
+    const facturasObj = tramite.facturas || {};
+    const documentosObtenidos = {};
 
-    const documentosObtenidos = [];
+    for (const [periodo, factura] of Object.entries(facturasObj)) {
+      try {
+        // El nombre de la carpeta y prefijo para el archivo
+        const prefix = `abierto-anual/${datosTramite.cuit}_${datosTramite.nroLegajo}_${periodo}`;
 
-    for (const documento of documentosArray) {
-      var fileId = null;
-      if (documento != null){
-        fileId = documento.contenido;
-      }
-      if (fileId && mongoose.Types.ObjectId.isValid(fileId)) {
-        const downloadStream = bucket.openDownloadStream(fileId);
-        const chunks = [];
+        // Buscar archivos que coincidan con ese prefijo en la carpeta 'abierto-anual'
+        const listResponse = await s3.listObjectsV2({
+          Bucket: 'haciendagesell',
+          Prefix: prefix,
+        }).promise();
 
-        try {
-          await new Promise((resolve, reject) => {
-            downloadStream.on('data', chunk => chunks.push(chunk));
-            downloadStream.on('error', error => {
-              console.error('Error downloading file:', error);
-              reject(error);
-            });
-            downloadStream.on('end', resolve);
-          });
-
-          const buffer = Buffer.concat(chunks);
-          const file = await bucket.find({ _id: mongoose.Types.ObjectId(fileId) }).next();
-          if (file) {
-            documentosObtenidos.push({
-              contentType: file.contentType,
-              data: buffer.toString('base64'),
-              filename: file.filename,
-            });
-          }
-        } catch (error) {
-          return res.status(500).json({
-            message: "Error processing file",
-            details: error.message
-          });
+        if (!listResponse.Contents || listResponse.Contents.length === 0) {
+          throw new Error(`No se encontraron archivos para el prefijo: ${prefix}`);
         }
-      }else{
-        documentosObtenidos.push(null);
+
+        const fileKey = listResponse.Contents[0].Key;
+        const data = await s3.getObject({
+          Bucket: 'haciendagesell',
+          Key: fileKey,
+        }).promise();
+
+        const extension = fileKey.split('.').pop() || 'pdf';
+
+        documentosObtenidos[periodo] = {
+          contentType: data.ContentType,
+          data: data.Body.toString('base64'),
+          filename: `${periodo}.${extension}`,
+        };
+      } catch (error) {
+        console.error(`Error descargando archivo desde S3 para factura ${periodo}:`, error.message);
+
+        documentosObtenidos[periodo] = {
+          error: `Archivo no encontrado en S3.`,
+        };
       }
     }
 
