@@ -22,6 +22,7 @@ const userActivityRoute = require('../routes/userActivity.route');
 const ordenCompraRoute = require('../routes/ordenCompra.route');
 const valeCombustibleRoute = require('../routes/valeCombustible.route');
 const proveedorRoute = require('../routes/proveedor.route');
+const PagoDobleRoute = require("../routes/pagoDoble.route");
 
 
 const app = express();
@@ -90,5 +91,6 @@ app.use('/config', configRoutes);
 app.use("/ordenesCompra", ordenCompraRoute);
 app.use("/valesCombustible", valeCombustibleRoute);
 app.use("/proveedores", proveedorRoute);
+app.use("/pagosDobles", PagoDobleRoute);
 
 module.exports = app;
