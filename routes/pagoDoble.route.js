@@ -8,7 +8,7 @@ router.get("/", PagoDobleController.getAll);
 router.post("/", PagoDobleController.add);
 router.put("/:id", PagoDobleController.update);
 router.put("/lazy/:id", PagoDobleController.updateLazy);
-router.delete("/:id", ObraController.delete);
+router.delete("/:id", PagoDobleController.delete);
 router.get("/:id", PagoDobleController.getById);
 router.get("/documentos/:id", PagoDobleController.getDocumentosById);
 // router.post("/documentos/delete/:id", PagoDobleController.deleteDocumentosById);
