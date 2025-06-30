@@ -23,7 +23,7 @@ const solicitanteSchema = new Schema({
   localidad: { type: String, required: true }, //Preguntar a myriam
   provincia: { type: String, required: true },
   mail: { type: String, required: true },
-  esApoderado: { type: Boolean, default: false },
+  esTitular: { type: Boolean, default: false },
 });
 
 const pagoDobleSchema = new Schema({
