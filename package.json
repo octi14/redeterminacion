@@ -1,7 +1,7 @@
 {
   "name": "redeterminacion",
   "version": "1.0.0",
-  "description": "Redeterminación de Presupuesto de obra pública",
+  "description": "Backend Villa Gesell",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
