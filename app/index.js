@@ -17,10 +17,16 @@ const TurnoRoute = require('../routes/turno.route');
 const AbiertoAnualRoute = require ('../routes/abiertoAnual.route');
 const MaestroComercioRoute = require('../routes/maestroComercio.route');
 const FechaRoute = require('../routes/fecha.route');
-
 const configRoutes = require('../routes/config.route');
 const userActivityRoute = require('../routes/userActivity.route');
 const CorreoRouter = require('../routes/correo.route');
+
+const ordenCompraRoute = require('../routes/ordenCompra.route');
+const valeCombustibleRoute = require('../routes/valeCombustible.route');
+const proveedorRoute = require('../routes/proveedor.route');
+const PagoDobleRoute = require("../routes/pagoDoble.route");
+
+
 
 const app = express();
 
@@ -36,17 +42,6 @@ app.use(jwt());
 // Conectar a la base de datos y cargar configuraciones globales
 (async () => {
   try {
-    const mongoUrl = process.env.MONGO_URL; // Accede a la variable de entorno
-    if (!mongoUrl) {
-      throw new Error("La variable MONGO_URL no está configurada en el archivo .env");
-    }
-
-    await mongoose.connect(mongoUrl, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log('Conectado a la base de datos.');
-
     // Cargar configuraciones globales en memoria
     await loadConfigs();
     console.log('Configuraciones globales cargadas.');
@@ -97,5 +92,9 @@ app.use("/fecha", FechaRoute);
 app.use("/api", userActivityRoute);
 app.use("/api", CorreoRouter);
 app.use('/config', configRoutes);
+app.use("/ordenesCompra", ordenCompraRoute);
+app.use("/valesCombustible", valeCombustibleRoute);
+app.use("/proveedores", proveedorRoute);
+app.use("/pagosDobles", PagoDobleRoute);
 
 module.exports = app;

@@ -69,10 +69,8 @@ exports.changePassword = async function(req, res) {
     const success = await UserService.changePassword(userId, oldPassword, newPassword);
 
     if (success) {
-      console.log("éxito");
       return res.status(200).json({ message: 'Contraseña cambiada exitosamente' });
     } else {
-      console.log("error");
       return res.status(400).json({ message: 'No se pudo cambiar la contraseña' });
     }
   } catch (e) {
