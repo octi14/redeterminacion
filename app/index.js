@@ -19,10 +19,13 @@ const MaestroComercioRoute = require('../routes/maestroComercio.route');
 const FechaRoute = require('../routes/fecha.route');
 const configRoutes = require('../routes/config.route');
 const userActivityRoute = require('../routes/userActivity.route');
+const CorreoRouter = require('../routes/correo.route');
+
 const ordenCompraRoute = require('../routes/ordenCompra.route');
 const valeCombustibleRoute = require('../routes/valeCombustible.route');
 const proveedorRoute = require('../routes/proveedor.route');
 const PagoDobleRoute = require("../routes/pagoDoble.route");
+
 
 
 const app = express();
@@ -87,6 +90,7 @@ app.use("/abiertoAnual", AbiertoAnualRoute);
 app.use("/maestro", MaestroComercioRoute);
 app.use("/fecha", FechaRoute);
 app.use("/api", userActivityRoute);
+app.use("/api", CorreoRouter);
 app.use('/config', configRoutes);
 app.use("/ordenesCompra", ordenCompraRoute);
 app.use("/valesCombustible", valeCombustibleRoute);
