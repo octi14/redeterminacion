@@ -1,7 +1,7 @@
 const correoService = require('../services/correo.service');
 const { getCachedConfig } = require('../services/configs.service');
 
-exports.enviarCorreoPrueba = async (req, res) => {
+exports.enviarCorreo = async (req, res) => {
   try {
     const isFeatureEnabled = getCachedConfig('mailerEnabled');
         if (!isFeatureEnabled) {
