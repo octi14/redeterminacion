@@ -41,7 +41,8 @@ const inmuebleSchema = new Schema({
   marquesina: { type: Boolean, default: false },
   mercaderia: { type: Boolean, default: false },
   mesas: { type: Boolean, default: false },
-  carteles: { type: Boolean, default: false }
+  carteles: { type: Boolean, default: false },
+  medidasCartel: { width: { type: Number }, height: { type: Number } },
 });
 
 const habilitacionSchema = new Schema({
