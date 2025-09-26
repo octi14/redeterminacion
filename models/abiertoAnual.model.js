@@ -5,7 +5,7 @@ const abiertoAnualSchema = new Schema({
     nroLegajo: { type: Number },
     dfe: { type: String },
     facturas: [{
-      contenido: { type: Schema.Types.ObjectId },
+      url: { type: String },
       observaciones: { type: String, default: '' },
       rectificando: { type: Boolean, default: false, },
     }],

@@ -25,6 +25,7 @@ const ordenCompraRoute = require('../routes/ordenCompra.route');
 const valeCombustibleRoute = require('../routes/valeCombustible.route');
 const proveedorRoute = require('../routes/proveedor.route');
 const PagoDobleRoute = require("../routes/pagoDoble.route");
+const VehiculoRoute = require('../routes/vehiculo.route');
 
 
 
@@ -96,5 +97,6 @@ app.use("/ordenesCompra", ordenCompraRoute);
 app.use("/valesCombustible", valeCombustibleRoute);
 app.use("/proveedores", proveedorRoute);
 app.use("/pagosDobles", PagoDobleRoute);
+app.use("/vehiculos", VehiculoRoute);
 
 module.exports = app;
