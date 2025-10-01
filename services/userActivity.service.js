@@ -5,11 +5,23 @@ exports.logUserActivity = async function (data) {
     try {
 
         console.log('Datos a guardar en la base de datos:', data); // Verifica qué datos se están enviando
-        
+
         const newActivity = new UserActivity(data);
         await newActivity.save();
         console.log('SERVICIO: Actividad de usuario registrada correctamente');
     } catch (error) {
         console.error('SERVICIO: Error al registrar la actividad de usuario:', error);
+    }
+}
+
+// Método para obtener todas las actividades de usuario
+exports.getAllUserActivities = async function () {
+    try {
+        const activities = await UserActivity.find().sort({ timestamp: -1 });
+        console.log('SERVICIO: Actividades de usuario obtenidas correctamente');
+        return activities;
+    } catch (error) {
+        console.error('SERVICIO: Error al obtener las actividades de usuario:', error);
+        throw error;
     }
 }

@@ -98,5 +98,6 @@ app.use("/valesCombustible", valeCombustibleRoute);
 app.use("/proveedores", proveedorRoute);
 app.use("/pagosDobles", PagoDobleRoute);
 app.use("/vehiculos", VehiculoRoute);
+app.use("/user-activities", userActivityRoute);
 
 module.exports = app;

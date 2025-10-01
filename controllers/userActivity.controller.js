@@ -28,3 +28,16 @@ exports.createUserActivity = async (req, res) => {
         res.status(500).json({ message: 'CONTROLLER: Error al registrar el log de actividad.' });
     }
 };
+
+exports.getAllUserActivities = async (req, res) => {
+    try {
+        const activities = await userActivityService.getAllUserActivities();
+        res.status(200).json({
+            message: 'CONTROLLER: Actividades de usuario obtenidas correctamente.',
+            data: activities
+        });
+    } catch (error) {
+        console.error('Error al obtener las actividades de usuario:', error);
+        res.status(500).json({ message: 'CONTROLLER: Error al obtener las actividades de usuario.' });
+    }
+};
