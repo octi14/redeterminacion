@@ -7,7 +7,7 @@ exports.enviarCorreo = async (destinatario, asunto, mensaje) => {
     secure: true,           // Cambiar a true si usas SSL (puerto 465)
     auth: {
       user: 'no-contestar@gesell.gob.ar',
-      pass: '[x$F]oU)0kvJ,DenY^',
+      pass: '03bA6YaGX*YW',
     },
   });
 
