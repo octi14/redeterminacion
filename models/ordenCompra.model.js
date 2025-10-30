@@ -1,7 +1,7 @@
 const { Schema, model } = require('mongoose');
 
 const ordenCompraSchema = new Schema({
-    nroOrden: { type: String },
+    nroOrden: { type: String, unique: true },
     area: { type: String },
     proveedor: { type: String },
     monto: [{
