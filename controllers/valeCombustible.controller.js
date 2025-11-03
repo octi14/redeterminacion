@@ -46,7 +46,20 @@ exports.add = async function (req, res) {
       return res.status(404).json({ message: "Orden de compra no encontrada" });
     }
 
-    let cant_vales = Array.isArray(ordenCompra.vales) ? ordenCompra.vales.length : 0;
+    // Fecha límite para el cambio de numeración: 4 de noviembre de 2025, 00:00 (hora Argentina)
+    const fechaLimite = new Date('2025-11-04T00:00:00-03:00'); // UTC-3 para hora Argentina
+    const ordenCreatedAt = new Date(ordenCompra.createdAt);
+
+    // Determinar qué sistema de numeración usar según la fecha de creación de la orden
+    let cant_vales;
+    if (ordenCreatedAt < fechaLimite) {
+      // Numeración antigua: cuenta todos los vales de la orden sin importar el tipo
+      cant_vales = Array.isArray(ordenCompra.vales) ? ordenCompra.vales.length : 0;
+    } else {
+      // Numeración nueva: cuenta solo vales del mismo tipo de combustible
+      const valesDelMismoTipo = await ValeCombustibleService.findByOrdenAndTipo(orden, tipoCombustible);
+      cant_vales = valesDelMismoTipo.length;
+    }
 
     // Crear múltiples vales según la cantidad especificada
     const valesCreados = [];

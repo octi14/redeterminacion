@@ -31,6 +31,15 @@ exports.findByOrdenId = async function (id) {
   }
 };
 
+exports.findByOrdenAndTipo = async function (ordenId, tipoCombustible) {
+  try {
+    return await ValeCombustible.find({ orden: ordenId, tipoCombustible: tipoCombustible });
+  } catch (e) {
+    console.error(e);
+    throw new Error("Error al obtener los vales de la orden por tipo de combustible.");
+  }
+};
+
 
 exports.update = async function (id, update) {
   try {
