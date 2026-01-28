@@ -9,5 +9,4 @@ router.post("/", ValeCombustibleController.add);
 router.post("/single", ValeCombustibleController.getAllByOrden);
 router.post("/anular/:id", ValeCombustibleController.anular);
 router.put("/:id", ValeCombustibleController.update);
-router.delete("/:id", ValeCombustibleController.delete);
 module.exports = router;

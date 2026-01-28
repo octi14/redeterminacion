@@ -39,6 +39,26 @@ exports.findByValeId = async function (valeId) {
   }
 };
 
+/**
+ * Reserva saldo de forma atómica para evitar condición de carrera con peticiones simultáneas.
+ * Decrementa el saldo del tipo de combustible indicado solo si hay saldo suficiente.
+ * @param {string} ordenId - ID de la orden de compra
+ * @param {string} tipoCombustible - Tipo de combustible
+ * @param {number} totalRequerido - Monto a reservar (se resta del saldo)
+ * @returns {Promise<object|null>} Orden actualizada o null si no hay saldo suficiente
+ */
+exports.reservarSaldo = async function (ordenId, tipoCombustible, totalRequerido) {
+  return await OrdenCompra.findOneAndUpdate(
+    {
+      _id: ordenId,
+      'saldoRestante.tipoCombustible': tipoCombustible,
+      'saldoRestante.saldo': { $gte: totalRequerido },
+    },
+    { $inc: { 'saldoRestante.$.saldo': -totalRequerido } },
+    { new: true }
+  );
+};
+
 exports.getOrCreate = async function (name) {
   const found = await OrdenCompra.findOne({
     name,

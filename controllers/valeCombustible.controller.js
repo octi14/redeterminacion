@@ -1,6 +1,5 @@
 let ValeCombustibleService = require("../services/valeCombustible.service");
 let OrdenCompraService = require("../services/ordenCompra.service");
-let OrdenCompra = require("../models/ordenCompra.model");
 
 // Obtener todos los vales de combustible por ID de orden de compra
 exports.getAllByOrden = async function (req, res) {
@@ -40,10 +39,28 @@ exports.add = async function (req, res) {
     }
 
     // Buscar la orden de compra
-    const ordenCompra = await OrdenCompra.findById(orden);
+    let ordenCompra = await OrdenCompraService.getById(orden);
 
     if (ordenCompra == null) { // Evalúa null y undefined
       return res.status(404).json({ message: "Orden de compra no encontrada" });
+    }
+
+    // Validar que el total (cantidad * monto) no exceda el saldo disponible para este tipo
+    const saldoTipo = ordenCompra.saldoRestante.find(s => s.tipoCombustible === tipoCombustible);
+    if (!saldoTipo) {
+      return res.status(400).json({ message: `No se encontró saldo para el tipo de combustible ${tipoCombustible} en esta orden.` });
+    }
+    const totalRequerido = cantidad * monto;
+    if (totalRequerido > saldoTipo.saldo) {
+      return res.status(400).json({ message: `Saldo insuficiente para el tipo de combustible ${tipoCombustible}. Total requerido: ${totalRequerido}, saldo disponible: ${saldoTipo.saldo}.` });
+    }
+
+    // Reservar saldo de forma atómica (delegado al servicio para evitar condición de carrera)
+    ordenCompra = await OrdenCompraService.reservarSaldo(orden, tipoCombustible, totalRequerido);
+    if (!ordenCompra) {
+      return res.status(400).json({
+        message: `Saldo insuficiente para el tipo de combustible ${tipoCombustible} (puede deberse a una operación concurrente).`,
+      });
     }
 
     // Fecha límite para el cambio de numeración: 4 de noviembre de 2025, 00:00 (hora Argentina)
@@ -79,15 +96,7 @@ exports.add = async function (req, res) {
       const createdVale = await ValeCombustibleService.create(valeData);
       ordenCompra.vales.push(createdVale._id); // Agregar el ID del vale a la orden
       valesCreados.push(createdVale);
-
-      // Descontar el saldo correspondiente según el tipo de combustible
-      const saldo = ordenCompra.saldoRestante.find(s => s.tipoCombustible === tipoCombustible);
-
-      if (saldo && saldo.saldo >= monto) {
-        saldo.saldo -= monto;
-      } else {
-        return res.status(400).json({ message: `Saldo insuficiente para el tipo de combustible ${tipoCombustible}.` });
-      }
+      // El saldo ya se descontó de forma atómica antes del bucle
     }
 
     // Generar la observación con la fecha y hora actual
@@ -104,6 +113,7 @@ exports.add = async function (req, res) {
     try {
       ordenCompra.markModified('vales');
       ordenCompra.markModified('observaciones');
+      ordenCompra.markModified('saldoRestante');
       await ordenCompra.save();
     } catch (err) {
       return res.status(500).json({ message: "Error al guardar la orden de compra." });
@@ -157,43 +167,6 @@ exports.update = async function (req, res) {
 };
 
 
-// Eliminar un vale de combustible
-exports.delete = async function (req, res) {
-  try {
-    const { id } = req.params; // Obtener el ID del vale desde los parámetros de la URL
-    const { ordenId } = req.body; // Recibir el ID de la orden de compra si se envía
-
-    // Eliminar el vale de la base de datos
-    const deletedVale = await ValeCombustibleService.delete(id);
-    if (!deletedVale) {
-      return res.status(404).json({ message: "Vale de combustible no encontrado" });
-    }
-
-    // Buscar y actualizar la orden de compra, removiendo el ID del vale eliminado
-    let ordenCompra;
-    if (ordenId) {
-      // Si tenemos el ID de la orden, buscamos directamente
-      ordenCompra = await OrdenCompraService.getById(ordenId);
-    } else {
-      // Si no tenemos el ID, buscamos la orden que tenga este vale
-      ordenCompra = await OrdenCompraService.findByValeId(id);
-    }
-
-    if (ordenCompra) {
-      ordenCompra.vales = ordenCompra.vales.filter(valeId => valeId.toString() !== id);
-      await ordenCompra.save();
-    }
-
-    return res.status(200).json({
-      message: "Vale de combustible eliminado correctamente",
-    });
-  } catch (e) {
-    return res.status(400).json({
-      message: e.message || "Ocurrió un error al eliminar el vale de combustible.",
-    });
-  }
-};
-
 // Anular un vale de combustible y devolver saldo a la orden de compra
 exports.anular = async function (req, res) {
   try {
@@ -225,6 +198,7 @@ exports.anular = async function (req, res) {
       if (saldoIndex !== -1) {
         // Si existe, sumamos el monto al saldo correspondiente
         ordenCompra.saldoRestante[saldoIndex].saldo += vale.monto;
+        ordenCompra.markModified('saldoRestante');
         await ordenCompra.save();
       } else {
         // Si no existe, lanzar un error
