@@ -1,6 +1,14 @@
 let ValeCombustible = require("../models/valeCombustible.model");
 let OrdenCompra = require("../models/ordenCompra.model");  // Importar el modelo de OrdenCompra
 
+/*
+ * Numeración de vales (nro_vale): la lógica se aplica en valeCombustible.controller (add).
+ * Fecha límite: 4 de noviembre de 2025. Antes de esa fecha las órdenes usaban un contador
+ * guardado en la orden (ordenCompra.vales.length). A partir del 4/11/2025 la numeración
+ * se calcula con la cantidad real de vales del tipo en BD (valesDelTipo.length), para que
+ * el número de vale sea consistente aunque se anulen vales o se creen desde distintos flujos.
+ */
+
 exports.create = async function (valeData) {
   try {
     const nuevoVale = new ValeCombustible(valeData);

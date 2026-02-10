@@ -16,12 +16,6 @@ exports.create = async function (ordenCompraData) {
   return file;
 };
 
-exports.update = async function (id, update) {
-  return OrdenCompra.findOneAndUpdate({ _id: id }, update, {
-    new: true,
-  });
-};
-
 exports.getById = async function (id) {
   return await OrdenCompra.findById(id);
 };
@@ -40,33 +34,20 @@ exports.findByValeId = async function (valeId) {
 };
 
 /**
- * Reserva saldo de forma atómica para evitar condición de carrera con peticiones simultáneas.
- * Decrementa el saldo del tipo de combustible indicado solo si hay saldo suficiente.
- * @param {string} ordenId - ID de la orden de compra
- * @param {string} tipoCombustible - Tipo de combustible
- * @param {number} totalRequerido - Monto a reservar (se resta del saldo)
- * @returns {Promise<object|null>} Orden actualizada o null si no hay saldo suficiente
+ * Agrega IDs de vales y una observación a la orden (solo $push; no toca saldoRestante).
+ * @param {string} ordenId - ID de la orden
+ * @param {Array} valeIds - Array de ObjectId de vales
+ * @param {string} observacion - Texto de la observación a agregar
+ * @returns {Promise<object|null>} Orden actualizada o null
  */
-exports.reservarSaldo = async function (ordenId, tipoCombustible, totalRequerido) {
+exports.agregarValesYObservacion = async function (ordenId, valeIds, observacion) {
+  const pushOp = {};
+  if (valeIds && valeIds.length) pushOp.vales = { $each: valeIds };
+  if (observacion != null && observacion !== '') pushOp.observaciones = observacion;
+  if (Object.keys(pushOp).length === 0) return await OrdenCompra.findById(ordenId);
   return await OrdenCompra.findOneAndUpdate(
-    {
-      _id: ordenId,
-      'saldoRestante.tipoCombustible': tipoCombustible,
-      'saldoRestante.saldo': { $gte: totalRequerido },
-    },
-    { $inc: { 'saldoRestante.$.saldo': -totalRequerido } },
+    { _id: ordenId },
+    { $push: pushOp },
     { new: true }
-  );
-};
-
-exports.getOrCreate = async function (name) {
-  const found = await OrdenCompra.findOne({
-    name,
-  });
-  return (
-    found ||
-    OrdenCompra.create({
-      name,
-    })
   );
 };
