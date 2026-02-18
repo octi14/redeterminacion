@@ -6,6 +6,7 @@ module.exports = {
   HOST: process.env.HOST || "127.0.0.1",
   PORT: process.env.PORT || 5000,
   MONGO_URL: process.env.MONGO_URL,
+  VIEJA_MONGO_URL: process.env.VIEJA_MONGO_URL,
   TOKEN_SECRET: process.env.TOKEN_SECRET || "secret",
   TOKEN_TIMEOUT: process.env.TOKEN_TIMEOUT || "48h",
   AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
