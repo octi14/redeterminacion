@@ -53,6 +53,10 @@ const habilitacionSchema = new Schema({
     type: String,
     default: 'En revisión',
   }, //chequear con myriam
+  visible: {
+    type: Boolean,
+    default: true,
+  },
   observaciones: {
     type: String,
   },
