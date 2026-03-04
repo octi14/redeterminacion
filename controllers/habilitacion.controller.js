@@ -1,14 +1,10 @@
 const Habilitacion = require('../models/habilitacion.model');
 const HabilitacionService = require('../services/habilitacion.service');
 const TicketController = require('../controllers/ticket.controller');
-const multer = require('multer');
-const {GridFsStorage} = require('multer-gridfs-storage');
-const { GridFSBucket } = require('mongodb');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 
 const AWS = require('aws-sdk');
-
 
 // Configurar AWS S3
 const s3 = new AWS.S3({
@@ -16,29 +12,6 @@ const s3 = new AWS.S3({
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   region: process.env.AWS_REGION,
 });
-
-// Crear una nueva instancia de GridFsStorage con la conexión de Mongoose
-const storage = new GridFsStorage({
-  url: 'mongodb+srv://octi14:octavio14@tiendacluster.1zpsi.mongodb.net/test?authSource=admin&replicaSet=atlas-7lljh4-shard-0&readPreference=primary&ssl=true', // Reemplaza por la URL de tu base de datos
-  options: { useNewUrlParser: true, useUnifiedTopology: true }, // Asegúrate de utilizar las mismas opciones que en la conexión de Mongoose
-  file: (req, file) => {
-    return {
-      bucketName: 'documentos', // Nombre del bucket donde se almacenarán los archivos
-      filename: file.originalname, // Usa el nombre original del archivo
-    };
-  },
-});
-
-const s3storage = multer.memoryStorage();  // Usamos almacenamiento en memoria con Multer
-
-
-// Configurar el storage para multer (opcional)
-// const storage = multer.memoryStorage(); // Almacenar los archivos en memoria como Buffers
-const upload = multer({
-   storage,
-   limits: {
-    fileSize: 48 * 1024 * 1024, // 5 MB
-  }, });
 
 exports.getAll = async function (req, res) {
   try {
@@ -57,94 +30,71 @@ exports.getAll = async function (req, res) {
 //anteriormente guardaba los archivos en un bucket de mongoDB atlas
 exports.add = async function (req, res) {
   try {
-    const upload = multer({
-      s3storage,
-      limits: {
-        fileSize: 48 * 1024 * 1024, // 48 MB
-      },
-    });
+    const nroTramite = await TicketController.getCurrent();
+    const documentos = req.body.habilitacion.documentos || {};
+    const formData = req.body.habilitacion;
+    formData.documentos = { documentos: [] };
 
-    upload.array('archivo', 10)(req, res, async function (err) {
-      if (err instanceof multer.MulterError) {
-        if (!res.headersSent) {
-          return res.status(400).json({
-            message: 'Error al cargar el archivo.',
+    const promises = [];
+
+    const agregarDocumento = async (nombreDocumento, documento, nroTramite) => {
+      if (documento && documento.contenido) {
+        // Determinar la extensión basándonos en el ContentType
+        const contentType = documento.contenido.contentType; // Ejemplo: 'application/pdf'
+        const extension = contentType.split('/')[1]; // Ejemplo: 'pdf'
+
+        // Crear el nombre del archivo con la extensión
+        const nombreArchivo = `${nombreDocumento}_${nroTramite}.${extension}`;
+
+        // Convertir el archivo de base64 a buffer
+        const buffer = Buffer.from(documento.contenido.data, 'base64');
+
+        const params = {
+          Bucket: 'haciendagesell',
+          Key: `mongo-backup/${nombreArchivo}`, // Usar el nombre con la extensión
+          Body: buffer,
+          ContentType: contentType,
+          // No es necesario usar ContentType aquí, ya que no lo estamos configurando explícitamente
+        };
+
+        try {
+          const data = await s3.upload(params).promise();
+          const fileUrl = data.Location; // URL pública del archivo subido
+
+          formData.documentos.documentos.push({
+            nombreDocumento: nombreDocumento,
+            url: fileUrl,
           });
-        }
-      } else if (err) {
-        if (!res.headersSent) {
-          return res.status(500).json({
-            message: 'Error interno del servidor.',
-          });
-        }
-      }
-
-      const nroTramite = await TicketController.getCurrent();
-      const documentos = req.body.habilitacion.documentos || {};
-      const formData = req.body.habilitacion;
-      formData.documentos = { documentos: [] };
-
-      const promises = [];
-
-      const agregarDocumento = async (nombreDocumento, documento, nroTramite) => {
-        if (documento && documento.contenido) {
-          // Determinar la extensión basándonos en el ContentType
-          const contentType = documento.contenido.contentType; // Ejemplo: 'application/pdf'
-          const extension = contentType.split('/')[1]; // Ejemplo: 'pdf'
-
-          // Crear el nombre del archivo con la extensión
-          const nombreArchivo = `${nombreDocumento}_${nroTramite}.${extension}`;
-
-          // Convertir el archivo de base64 a buffer
-          const buffer = Buffer.from(documento.contenido.data, 'base64');
-
-          const params = {
-            Bucket: 'haciendagesell',
-            Key: `mongo-backup/${nombreArchivo}`, // Usar el nombre con la extensión
-            Body: buffer,
-            ContentType: contentType,
-            // No es necesario usar ContentType aquí, ya que no lo estamos configurando explícitamente
-          };
-
-          try {
-            const data = await s3.upload(params).promise();
-            const fileUrl = data.Location; // URL pública del archivo subido
-
-            formData.documentos.documentos.push({
-              nombreDocumento: nombreDocumento,
-              url: fileUrl,
+        } catch (error) {
+          console.error('Error subiendo archivo a S3:', error.message);
+          if (!res.headersSent) {
+            return res.status(500).json({
+              message: 'Error subiendo el archivo a S3.',
             });
-          } catch (error) {
-            console.error('Error subiendo archivo a S3:', error.message);
-            if (!res.headersSent) {
-              return res.status(500).json({
-                message: 'Error subiendo el archivo a S3.',
-              });
-            }
           }
         }
-      };
-
-      // Procesar todos los documentos
-      for (const nombreDocumento in documentos) {
-        if (documentos.hasOwnProperty(nombreDocumento)) {
-          const documento = documentos[nombreDocumento];
-          promises.push(agregarDocumento(documento.nombreDocumento, documento, nroTramite));
-        }
       }
+    };
 
-      await Promise.all(promises);
-
-      formData.nroSolicitud = nroTramite;
-      const createdHabilitacion = await HabilitacionService.create(formData);
-
-      if (!res.headersSent) {
-        return res.status(201).json({
-          message: 'Habilitación creada con éxito.',
-          data: nroTramite,
-        });
+    // Procesar todos los documentos
+    for (const nombreDocumento in documentos) {
+      if (documentos.hasOwnProperty(nombreDocumento)) {
+        const documento = documentos[nombreDocumento];
+        promises.push(agregarDocumento(documento.nombreDocumento, documento, nroTramite));
       }
-    });
+    }
+
+    await Promise.all(promises);
+
+    formData.nroSolicitud = nroTramite;
+    const createdHabilitacion = await HabilitacionService.create(formData);
+
+    if (!res.headersSent) {
+      return res.status(201).json({
+        message: 'Habilitación creada con éxito.',
+        data: nroTramite,
+      });
+    }
   } catch (e) {
     if (!res.headersSent) {
       return res.status(400).json({
@@ -422,61 +372,58 @@ exports.migrarHabilitacion = async function (req, res) {
   }
 };*/
 
-//to do: modificarlo para funcionar con s3
+// Elimina los documentos de la habilitación: borra en S3 si tienen url; limpia referencias en MongoDB.
+function s3KeyFromUrl(url) {
+  try {
+    const pathname = new URL(url).pathname;
+    const parts = pathname.split('/').filter(Boolean);
+    return parts[0] === 'haciendagesell' ? parts.slice(1).join('/') : pathname.replace(/^\//, '');
+  } catch (_) {
+    return null;
+  }
+}
+
 exports.deleteDocumentosById = async function (req, res) {
   try {
-    const { id } = req.params; // Obtén el ID de la habilitación que deseas eliminar los documentos
-    // Busca la habilitación por su ID
-    var habilitacion = null;
-    try{
-      habilitacion = await Habilitacion.findById(new mongoose.Types.ObjectId(id)).select("documentos").exec();
-    } catch(e) {
-      return res.status(400).json({
-        message: e.message,
-      });
+    const { id } = req.params;
+    let habilitacion;
+    try {
+      habilitacion = await Habilitacion.findById(new mongoose.Types.ObjectId(id)).select('documentos').exec();
+    } catch (e) {
+      return res.status(400).json({ message: e.message });
     }
 
     if (!habilitacion) {
-      return res.status(404).json({
-        message: 'La habilitación no se encontró en la base de datos',
-      });
+      return res.status(404).json({ message: 'La habilitación no se encontró en la base de datos' });
     }
 
-    const documentos = habilitacion.documentos.documentos.toObject(); // Convierte a un objeto Mongoose
+    const documentos = habilitacion.documentos.documentos.toObject();
 
-    // Accede al bucket de GridFS
-    const bucket = new GridFSBucket(mongoose.connection.db, {
-      bucketName: 'documentos',
-    });
-
-    // Itera a través de los campos de documentos y elimina cada documento asociado a la habilitación específica
     const promises = Object.keys(documentos).map(async (campo) => {
-      let documentoId = documentos[campo].contenido;
-      if (documentoId && campo !== "_id") {
-        try {
-          await bucket.delete(documentoId);
-          documentos[campo] = null; // Marca el documento como eliminado
-        } catch (e) {
-          console.log(`Error tratando de borrar el documento ${documentoId}`);
+      if (campo === '_id') return;
+      const doc = documentos[campo];
+      if (!doc) return;
+
+      if (doc.url) {
+        const key = s3KeyFromUrl(doc.url);
+        if (key) {
+          try {
+            await s3.deleteObject({ Bucket: 'haciendagesell', Key: key }).promise();
+          } catch (e) {
+            console.log(`Error borrando en S3 key ${key}:`, e.message);
+          }
         }
       }
+      documentos[campo] = null;
     });
 
-    // Espera a que todas las eliminaciones se completen antes de responder
     await Promise.all(promises);
 
-    // Actualiza la referencia de documentos en la instancia de habilitacion
     habilitacion.documentos.documentos = documentos;
-
-    // Guarda la instancia actualizada en la base de datos
     await habilitacion.save();
 
-    return res.status(200).json({
-      message: 'Documentos eliminados con éxito.',
-    });
+    return res.status(200).json({ message: 'Documentos eliminados con éxito.' });
   } catch (e) {
-    return res.status(400).json({
-      message: e.message,
-    });
+    return res.status(400).json({ message: e.message });
   }
 };

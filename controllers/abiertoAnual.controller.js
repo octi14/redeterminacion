@@ -1,30 +1,9 @@
-const AbiertoAnual = require('../models/abiertoAnual.model'); // Asumiendo que has creado este modelo
+const AbiertoAnual = require('../models/abiertoAnual.model');
 const AbiertoAnualService = require('../services/abiertoAnual.service');
-const multer = require('multer');
-const { GridFsStorage } = require('multer-gridfs-storage');
-const { GridFSBucket } = require('mongodb');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 const AWS = require('aws-sdk');
 
-// Configuración de GridFsStorage para guardar en un bucket 'facturas'
-const storage = new GridFsStorage({
-  url: 'mongodb+srv://octi14:octavio14@tiendacluster.1zpsi.mongodb.net/test?authSource=admin&replicaSet=atlas-7lljh4-shard-0&readPreference=primary&ssl=true', // Reemplaza por la URL de tu base de datos
-  options: { useNewUrlParser: true, useUnifiedTopology: true },
-  file: (req, file) => {
-    return {
-      bucketName: 'facturas', // Cambia 'documentos' por 'facturas'
-      filename: file.originalname, // Usa el nombre original del archivo
-    };
-  },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 48 * 1024 * 1024 } // Limita el tamaño del archivo a 5MB
-});
-
-// Configuración AWS SDK
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID, // definilo en tu .env
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY, // definilo en tu .env
@@ -250,62 +229,3 @@ exports.update = async (req, res) => {
     });
   }
 };
-
-// exports.deleteFacturasById = async function (req, res) {
-//   try {
-//     const { id } = req.params; // Obtén el ID de la habilitación que deseas eliminar los documentos
-//     // Busca la habilitación por su ID
-//     var tramite = null;
-//     try{
-//       tramite = await AbiertoAnual.findById(new mongoose.Types.ObjectId(id)).select("facturas").exec();
-//     }catch(e){
-//       console.log("Algo está mal con el ID.");
-//     };
-//
-//     if (!tramite) {
-//       return res.status(404).json({
-//         message: 'La habilitación no se encontró en la base de datos.',
-//       });
-//     }
-//
-//     const facturas = tramite.facturas.toObject(); // Convierte a un objeto Mongoose
-//
-//     // Accede al bucket de GridFS
-//     const bucket = new GridFSBucket(mongoose.connection.db, {
-//       bucketName: 'facturas',
-//     });
-//
-//     // Itera a través de los campos de documentos y elimina cada documento asociado a la habilitación específica
-//     const promises = Object.keys(documentos).map(async (campo) => {
-//       var documentoId = null;
-//       if(facturas[campo] != null && campo != "_id"){
-//         documentoId = facturas[campo];
-//         // Utiliza el método delete para eliminar el documento por su ID
-//         try{
-//           await bucket.delete(documentoId);
-//         }catch(e){
-//           console.log("Error tratando de borrar el documento " + documentoId);
-//         }
-//       }
-//       facturas[campo] = null;
-//     });
-//
-//     // Espera a que todas las eliminaciones se completen antes de responder
-//
-//     await Promise.all(promises);
-//
-//     // Actualiza la referencia de documentos en la instancia de habilitacion
-//     tramite.facturas = facturas;
-//
-//     // Guarda la instancia actualizada en la base de datos
-//     await tramite.save();
-//
-//     return res.status(200).json({
-//       message: 'Documentos eliminados con éxito.',
-//     });
-//   } catch (e) {
-//     return res.status(400).json({
-//       message: e.message,
-//     });
-//   }
-// };
