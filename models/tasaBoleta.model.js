@@ -20,9 +20,22 @@ const tasaBoletaSchema = new Schema(
       marca: { type: String },
       modelo: { type: String },
       anioModelo: { type: Number },
+      partida: { type: String },
+      catastro: { type: String },
+      parcela: { type: String },
+      metrosConstruidos: { type: Number },
+      zona: { type: String },
     },
     recibo: { type: String },
     mensajeDeuda: { type: String },
+    mensajeBoleta: { type: String },
+    conceptos: [
+      {
+        codigo: { type: String },
+        nombre: { type: String },
+        importeCentavos: { type: Number },
+      },
+    ],
     importeCentavos: { type: Number, required: true },
     vencimientos: [
       {
@@ -45,5 +58,6 @@ tasaBoletaSchema.index(
   { tipoTasa: 1, objetoClave: 1, anio: 1, cuota: 1, activa: 1 },
   { unique: true, partialFilterExpression: { activa: true } }
 );
+tasaBoletaSchema.index({ tipoTasa: 1, importacionId: 1, periodo: 1, activa: 1 });
 
 module.exports = model("tasaBoleta", tasaBoletaSchema);

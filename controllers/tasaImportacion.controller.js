@@ -1,5 +1,11 @@
 const TasaImportacion = require("../models/tasaImportacion.model");
 const TasaImportacionService = require("../services/tasaImportacion.service");
+const TasaCatalogo = require("../services/tasaCatalogo.service");
+const fs = require("fs");
+
+function tipoTasa(req) {
+  return String(req.query.tipoTasa || req.headers["x-tipo-tasa"] || "AUTOMOTORES").toUpperCase();
+}
 
 function fileName(req) {
   const raw = req.headers["x-file-name"] || "automotores.xlsx";
@@ -10,39 +16,47 @@ function fileName(req) {
   }
 }
 
-function requireBuffer(req) {
-  if (!Buffer.isBuffer(req.body) || !req.body.length) {
-    const error = new Error("Debe enviar un archivo XLSX.");
-    error.status = 400;
-    throw error;
-  }
-  return req.body;
+function requireArchivo(req) {
+  if (!req.archivoTemporal) throw Object.assign(new Error("Debe enviar un archivo XLSX."), { status: 400 });
+  return req.archivoTemporal;
 }
 
 exports.analizar = async function (req, res) {
+  let archivo;
   try {
-    const importacion = await TasaImportacionService.crearIntento({
-      buffer: requireBuffer(req),
+    archivo = requireArchivo(req);
+    const importacion = await TasaImportacionService.iniciarAnalisis({
+      filePath: archivo.path,
+      fileHash: archivo.hash,
+      fileSize: archivo.size,
       fileName: fileName(req),
+      tipoTasa: tipoTasa(req),
       user: req.authenticatedUser,
     });
-    return res.status(201).json({ data: importacion });
+    archivo = null;
+    return res.status(202).json({ data: importacion });
   } catch (error) {
     return res.status(error.status || 500).json({ message: error.message });
+  } finally {
+    if (archivo) await fs.promises.unlink(archivo.path).catch(() => {});
   }
 };
 
 exports.publicar = async function (req, res) {
+  let archivo;
   try {
-    const result = await TasaImportacionService.publicar({
+    archivo = requireArchivo(req);
+    const importacion = await TasaImportacionService.iniciarPublicacion({
       importacionId: req.params.id,
-      buffer: requireBuffer(req),
+      filePath: archivo.path,
+      fileHash: archivo.hash,
       confirmarReemplazo: req.headers["x-confirmar-reemplazo"] === "true",
       confirmarPeriodosFuturos: req.headers["x-confirmar-periodos-futuros"] === "true",
       guardarOriginal: req.headers["x-guardar-original"] === "true",
       user: req.authenticatedUser,
     });
-    return res.status(200).json({ data: result });
+    archivo = null;
+    return res.status(202).json({ data: importacion });
   } catch (error) {
     return res.status(error.status || 500).json({
       message: error.message,
@@ -50,18 +64,21 @@ exports.publicar = async function (req, res) {
       periodosFuturos: error.periodosFuturos || [],
       resultado: error.result,
     });
+  } finally {
+    if (archivo) await fs.promises.unlink(archivo.path).catch(() => {});
   }
 };
 
 exports.listar = async function (_req, res) {
   try {
-    const imports = await TasaImportacion.find()
+    const tasa = TasaCatalogo.requerir(tipoTasa(_req));
+    const imports = await TasaImportacion.find({ tipoTasa: tasa.codigo })
       .select("-observaciones")
       .sort({ createdAt: -1 })
       .limit(2000);
     return res.status(200).json({ data: imports });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.status || 500).json({ message: error.message });
   }
 };
 
@@ -75,16 +92,28 @@ exports.obtener = async function (req, res) {
   }
 };
 
+exports.progreso = async function (req, res) {
+  try {
+    const importacion = await TasaImportacion.findById(req.params.id)
+      .select("estado progresoPublicacion")
+      .lean();
+    if (!importacion) return res.status(404).json({ message: "Importación no encontrada." });
+    return res.status(200).json({ data: importacion });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 exports.reporte = async function (req, res) {
   try {
     const importacion = await TasaImportacion.findById(req.params.id);
     if (!importacion) return res.status(404).json({ message: "Importación no encontrada." });
     const lines = [
-      "REPORTE DE VALIDACIÓN DE BOLETAS DE AUTOMOTORES",
+      `REPORTE DE VALIDACIÓN DE BOLETAS DE ${importacion.tipoTasa}`,
       `Archivo: ${importacion.nombreArchivo}`,
       `Fecha: ${importacion.createdAt.toISOString()}`,
       `Entradas: ${importacion.cantidadEntradas}`,
-      `Dominios: ${importacion.cantidadObjetos}`,
+      `${importacion.tipoTasa === "URBANA" ? "Partidas" : "Dominios"}: ${importacion.cantidadObjetos}`,
       `Períodos: ${importacion.periodos.join(", ")}`,
       `Errores: ${importacion.cantidadErrores}`,
       `Advertencias: ${importacion.cantidadAdvertencias}`,
@@ -116,7 +145,7 @@ exports.archivoOriginal = async function (req, res) {
 
 exports.obtenerConfiguracion = async function (_req, res) {
   try {
-    const enabled = await TasaImportacionService.guardarOriginalHabilitado();
+    const enabled = await TasaImportacionService.guardarOriginalHabilitado(tipoTasa(_req));
     return res.status(200).json({ data: { guardarArchivoOriginalTasas: enabled } });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -126,7 +155,8 @@ exports.obtenerConfiguracion = async function (_req, res) {
 exports.actualizarConfiguracion = async function (req, res) {
   try {
     const config = await TasaImportacionService.actualizarConfiguracionGuardarOriginal(
-      req.body.guardarArchivoOriginalTasas
+      req.body.guardarArchivoOriginalTasas,
+      tipoTasa(req)
     );
     return res.status(200).json({ data: config });
   } catch (error) {
@@ -136,11 +166,15 @@ exports.actualizarConfiguracion = async function (req, res) {
 
 exports.listarPeriodos = async function (_req, res) {
   try {
-    const periodos = await TasaImportacionService.listarPeriodosCargados();
+    const periodos = await TasaImportacionService.listarPeriodosCargados(tipoTasa(_req));
     return res.status(200).json({ data: periodos });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.status || 500).json({ message: error.message });
   }
+};
+
+exports.listarTipos = function (_req, res) {
+  return res.status(200).json({ data: TasaCatalogo.listar() });
 };
 
 exports.cambiarEstadoPeriodo = async function (req, res) {

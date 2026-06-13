@@ -1,10 +1,12 @@
 const crypto = require("crypto");
+const fs = require("fs");
 const ExcelJS = require("exceljs");
 const AWS = require("aws-sdk");
 const mongoose = require("mongoose");
 const Config = require("../models/configs.model");
 const TasaImportacion = require("../models/tasaImportacion.model");
 const TasaBoleta = require("../models/tasaBoleta.model");
+const TasaCatalogo = require("./tasaCatalogo.service");
 
 const MAX_OBSERVACIONES = 5000;
 const S3_BUCKET = process.env.AWS_BUCKET || "haciendagesell";
@@ -26,7 +28,33 @@ const REQUERIDAS = {
     "Marca", "Modelo", "Año", "Cuota", "$ 1er.Vto.", "$ 2do.Vto.", "1er.Vto.",
     "2do.Vto.", "Cod.Barra", "Pago Mis Cuentas", "Red Link",
   ],
+  urbana: [
+    "Titular", "Partida", "Catastro", "Mes", "Año", "Recibo", "$1erVto", "$2doVto",
+    "F-1erVto", "F-2doVto", "CodBarra-1erVto", "CodBarra-2doVto", "Banelco", "RedLink",
+  ],
 };
+
+const CONCEPTOS_URBANA = [
+  ["Alumb", "Tasa de Alumbrado"],
+  ["Limp", "Tasa de Limpieza"],
+  ["CVP", "Tasa C.V.P."],
+  ["Bomber", "Tasa de Bomberos"],
+  ["Cement", "Tasa de Cementerio"],
+  ["Turist", "Tasa Turística"],
+  ["Segur", "Tasa de Seguridad"],
+  ["Salud", "Tasa de Salud"],
+  ["Resid", "Tasa de Residuos"],
+  ["SegPya", "Seguridad en Playas"],
+  ["AguaCor", "Tasa de Agua Corriente"],
+  ["Retro", "Retroactivo"],
+  ["O.Gas", "Obra de Gas"],
+  ["MqVial", "Mantenimiento vial"],
+  ["Obras24", "Obras"],
+  ["Hospital", "Obras Hospital"],
+  ["Bonif10$", "Bonificación B.C."],
+  ["Bonif20%", "Bonificación 1er vencimiento"],
+  ["Credito", "Créditos"],
+];
 
 function texto(value) {
   return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
@@ -128,13 +156,13 @@ function codigosBarra(row) {
     .filter(Boolean);
 }
 
-function construirBoleta(row, importacionId) {
+function construirBoleta(row, importacionId, tipoTasa = "AUTOMOTORES") {
   const dominio = texto(row.Dominio).replace(/[\s-]/g, "").toUpperCase();
   const mes = Number(row.Mes);
   const anio = Number(row.Año);
   const bars = codigosBarra(row);
   return {
-    tipoTasa: "AUTOMOTORES",
+    tipoTasa,
     importacionId,
     objetoClave: dominio,
     anio,
@@ -168,9 +196,110 @@ function construirBoleta(row, importacionId) {
   };
 }
 
-async function analizarBuffer(buffer, { incluirBoletas = false } = {}) {
+function construirBoletaUrbana(row, importacionId) {
+  const partida = texto(row.Partida).replace(/\s/g, "").toUpperCase();
+  const mes = Number(row.Mes);
+  const anio = Number(row.Año);
+  return {
+    tipoTasa: "URBANA",
+    importacionId,
+    objetoClave: partida,
+    anio,
+    cuota: mes,
+    periodo: `${String(mes).padStart(2, "0")}/${anio}`,
+    contribuyente: {
+      nombre: texto(row.Titular),
+      domicilio: texto(row.Domicilio),
+      localidad: texto(row.Localidad),
+      codigoPostal: texto(row["C.P."]),
+    },
+    objeto: {
+      partida,
+      catastro: texto(row.Catastro),
+      parcela: texto(row.Parcela),
+      metrosConstruidos: Number(row.Const) || undefined,
+      zona: texto(row.Zon),
+    },
+    recibo: texto(row.Recibo),
+    mensajeDeuda: texto(row.DeudaTexto),
+    mensajeBoleta: texto(row["TEXTO-2"]),
+    conceptos: CONCEPTOS_URBANA
+      .map(([codigo, nombre]) => ({ codigo, nombre, importeCentavos: importeCentavos(row[codigo]) }))
+      .filter((item) => item.importeCentavos != null && item.importeCentavos !== 0),
+    importeCentavos: importeCentavos(row["$1erVto"]),
+    vencimientos: [
+      { orden: 1, fecha: fecha(row["F-1erVto"]), importeCentavos: importeCentavos(row["$1erVto"]), codigoBarra: texto(row["CodBarra-1erVto"]) },
+      { orden: 2, fecha: fecha(row["F-2doVto"]), importeCentavos: importeCentavos(row["$2doVto"]), codigoBarra: texto(row["CodBarra-2doVto"]) },
+    ],
+    codigosPago: {
+      pagoMisCuentas: texto(row.Banelco),
+      redLink: texto(row.RedLink),
+    },
+    activa: false,
+  };
+}
+
+function analizarFilasUrbanas(worksheet, detected, resultado, incluirBoletas) {
+  const seen = new Map();
+  const partidas = new Set();
+  const periods = new Set();
+  const lastRow = worksheet.actualRowCount || worksheet.rowCount;
+
+  for (let rowNumber = detected.headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
+    const row = filaComoObjeto(worksheet.getRow(rowNumber), detected.headers);
+    if (!Object.values(row).some((value) => texto(value))) continue;
+    resultado.cantidadEntradas += 1;
+
+    const partida = texto(row.Partida).replace(/\s/g, "").toUpperCase();
+    const month = Number(row.Mes);
+    const year = Number(row.Año);
+    const firstAmount = importeCentavos(row["$1erVto"]);
+    const secondAmount = importeCentavos(row["$2doVto"]);
+    const firstDate = fecha(row["F-1erVto"]);
+    const secondDate = fecha(row["F-2doVto"]);
+    const firstBarcode = texto(row["CodBarra-1erVto"]);
+    const secondBarcode = texto(row["CodBarra-2doVto"]);
+
+    if (!texto(row.Titular)) agregarObservacion(resultado, "error", rowNumber, "Titular", "El titular es obligatorio.");
+    if (!partida) agregarObservacion(resultado, "error", rowNumber, "Partida", "La partida es obligatoria.");
+    else if (!/^[A-Z0-9]{1,16}$/.test(partida)) agregarObservacion(resultado, "error", rowNumber, "Partida", "Debe contener entre 1 y 16 caracteres alfanuméricos.");
+    if (!texto(row.Domicilio)) agregarObservacion(resultado, "advertencia", rowNumber, "Domicilio", "El domicilio está vacío.");
+    if (!texto(row.Localidad)) agregarObservacion(resultado, "advertencia", rowNumber, "Localidad", "La localidad está vacía.");
+    if (!texto(row.Catastro)) agregarObservacion(resultado, "advertencia", rowNumber, "Catastro", "La nomenclatura catastral está vacía.");
+    if (!texto(row.Zon)) agregarObservacion(resultado, "advertencia", rowNumber, "Zon", "La zona está vacía.");
+    if (!Number.isInteger(month) || month < 1 || month > 12) agregarObservacion(resultado, "error", rowNumber, "Mes", "Debe ser un mes entre 01 y 12.");
+    if (!Number.isInteger(year) || year < 1900 || year > 2200) agregarObservacion(resultado, "error", rowNumber, "Año", "Debe ser un año válido de cuatro dígitos.");
+    if (!texto(row.Recibo)) agregarObservacion(resultado, "error", rowNumber, "Recibo", "El número de recibo es obligatorio.");
+    if (firstAmount == null || firstAmount < 0) agregarObservacion(resultado, "error", rowNumber, "$1erVto", "Debe ser un importe válido mayor o igual a cero.");
+    if (secondAmount == null || secondAmount < 0) agregarObservacion(resultado, "error", rowNumber, "$2doVto", "Debe ser un importe válido mayor o igual a cero.");
+    if (firstAmount != null && secondAmount != null && secondAmount < firstAmount) agregarObservacion(resultado, "advertencia", rowNumber, "$2doVto", "Es menor que el primer vencimiento.");
+    if (!firstDate) agregarObservacion(resultado, "error", rowNumber, "F-1erVto", "La fecha del primer vencimiento no es válida.");
+    if (!secondDate) agregarObservacion(resultado, "error", rowNumber, "F-2doVto", "La fecha del segundo vencimiento no es válida.");
+    if (firstDate && secondDate && secondDate < firstDate) agregarObservacion(resultado, "error", rowNumber, "F-2doVto", "Es anterior al primer vencimiento.");
+    if (!firstBarcode || !/^[A-Z0-9]+$/i.test(firstBarcode)) agregarObservacion(resultado, "error", rowNumber, "CodBarra-1erVto", "El código de barras no es válido.");
+    if (!secondBarcode || !/^[A-Z0-9]+$/i.test(secondBarcode)) agregarObservacion(resultado, "error", rowNumber, "CodBarra-2doVto", "El código de barras no es válido.");
+    if (!texto(row.Banelco)) agregarObservacion(resultado, "error", rowNumber, "Banelco", "El código de Pago Mis Cuentas es obligatorio.");
+    if (!texto(row.RedLink)) agregarObservacion(resultado, "error", rowNumber, "RedLink", "El código de Red Link es obligatorio.");
+
+    if (partida && Number.isInteger(month) && Number.isInteger(year)) {
+      const key = `${partida}|${year}|${month}`;
+      if (seen.has(key)) agregarObservacion(resultado, "error", rowNumber, "Partida / período", `Registro duplicado; también aparece en la fila ${seen.get(key)}.`);
+      else seen.set(key, rowNumber);
+      partidas.add(partida);
+      periods.add(`${String(month).padStart(2, "0")}/${year}`);
+    }
+    if (incluirBoletas) resultado.boletas.push(construirBoletaUrbana(row, null));
+  }
+
+  resultado.cantidadObjetos = partidas.size;
+  resultado.periodos = Array.from(periods).sort();
+  return resultado;
+}
+
+async function analizarFuente(source, { incluirBoletas = false, tipoTasa = "AUTOMOTORES" } = {}) {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
+  if (Buffer.isBuffer(source)) await workbook.xlsx.load(source);
+  else await workbook.xlsx.readFile(source);
   const worksheet = workbook.worksheets[0];
   const resultado = {
     formato: "desconocido",
@@ -191,11 +320,14 @@ async function analizarBuffer(buffer, { incluirBoletas = false } = {}) {
 
   const detected = detectarFormato(worksheet);
   if (!detected) {
-    agregarObservacion(resultado, "error", null, "Formato", "No se reconoció una plantilla válida de Automotores.");
+    agregarObservacion(resultado, "error", null, "Formato", "No se reconoció una plantilla válida para la tasa seleccionada.");
     return resultado;
   }
-  if (detected.formato === "urbana") {
-    agregarObservacion(resultado, "error", null, "Formato", "El archivo corresponde a Tasas Urbanas. Actualmente sólo se admite Automotores.");
+  const formatoCoincide = tipoTasa === "URBANA"
+    ? detected.formato === "urbana"
+    : ["completo", "simplificado"].includes(detected.formato);
+  if (!formatoCoincide) {
+    agregarObservacion(resultado, "error", null, "Formato", `El archivo no corresponde a ${tipoTasa === "URBANA" ? "Tasa Urbana" : "Automotores"}.`);
     return resultado;
   }
 
@@ -203,6 +335,9 @@ async function analizarBuffer(buffer, { incluirBoletas = false } = {}) {
   const missing = REQUERIDAS[detected.formato].filter((header) => !detected.headers.includes(header));
   missing.forEach((header) => agregarObservacion(resultado, "error", detected.headerRow, header, "Falta una columna obligatoria."));
   if (missing.length) return resultado;
+  if (detected.formato === "urbana") {
+    return analizarFilasUrbanas(worksheet, detected, resultado, incluirBoletas);
+  }
 
   const seen = new Map();
   const domains = new Set();
@@ -250,12 +385,20 @@ async function analizarBuffer(buffer, { incluirBoletas = false } = {}) {
       periods.add(`${String(month).padStart(2, "0")}/${year}`);
     }
 
-    if (incluirBoletas) resultado.boletas.push(construirBoleta(row, null));
+    if (incluirBoletas) resultado.boletas.push(construirBoleta(row, null, tipoTasa));
   }
 
   resultado.cantidadObjetos = domains.size;
   resultado.periodos = Array.from(periods).sort();
   return resultado;
+}
+
+function analizarBuffer(buffer, options) {
+  return analizarFuente(buffer, options);
+}
+
+function analizarArchivo(filePath, options) {
+  return analizarFuente(filePath, options);
 }
 
 function hashBuffer(buffer) {
@@ -266,7 +409,7 @@ function escaparRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-async function nombreArchivoDisponible(fileName) {
+async function nombreArchivoDisponible(fileName, tipoTasa = "AUTOMOTORES") {
   const limpio = texto(fileName).split(/[\\/]/).pop() || "automotores.xlsx";
   const extensionIndex = limpio.lastIndexOf(".");
   const extension = extensionIndex > 0 ? limpio.slice(extensionIndex) : "";
@@ -277,7 +420,7 @@ async function nombreArchivoDisponible(fileName) {
     "i"
   );
   const existentes = await TasaImportacion.find({
-    tipoTasa: "AUTOMOTORES",
+    tipoTasa,
     nombreArchivo: coincidenciaFamilia,
   }).select("nombreArchivo").lean();
 
@@ -296,8 +439,12 @@ function claveNombreArchivo(fileName) {
   return texto(fileName).toLocaleLowerCase();
 }
 
-async function guardarOriginalHabilitado() {
-  const config = await Config.findOne({ key: "guardarArchivoOriginalTasas" });
+async function guardarOriginalHabilitado(tipoTasa = "AUTOMOTORES") {
+  const key = `guardarArchivoOriginalTasas:${tipoTasa}`;
+  let config = await Config.findOne({ key });
+  if (!config && tipoTasa === "AUTOMOTORES") {
+    config = await Config.findOne({ key: "guardarArchivoOriginalTasas" });
+  }
   return Boolean(config && config.value === true);
 }
 
@@ -308,11 +455,28 @@ async function subirOriginal(buffer, importacion, fileName) {
     region: process.env.AWS_REGION,
   });
   const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const key = `tasas/automotores/${importacion._id}/${safeName}`;
+  const key = `tasas/${importacion.tipoTasa.toLocaleLowerCase()}/${importacion._id}/${safeName}`;
   const uploaded = await s3.upload({
     Bucket: S3_BUCKET,
     Key: key,
     Body: buffer,
+    ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  }).promise();
+  return { almacenado: true, key, url: uploaded.Location };
+}
+
+async function subirOriginalArchivo(filePath, importacion, fileName) {
+  const s3 = new AWS.S3({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION,
+  });
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const key = `tasas/${importacion.tipoTasa.toLocaleLowerCase()}/${importacion._id}/${safeName}`;
+  const uploaded = await s3.upload({
+    Bucket: S3_BUCKET,
+    Key: key,
+    Body: fs.createReadStream(filePath),
     ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   }).promise();
   return { almacenado: true, key, url: uploaded.Location };
@@ -345,17 +509,20 @@ async function obtenerArchivoOriginal(importacionId) {
   };
 }
 
-async function crearIntento({ buffer, fileName, user }) {
-  const result = await analizarBuffer(buffer);
+async function crearIntento({ buffer, filePath, fileHash, fileSize, fileName, tipoTasa = "AUTOMOTORES", user }) {
+  TasaCatalogo.requerir(tipoTasa, { importable: true });
+  const result = filePath
+    ? await analizarArchivo(filePath, { tipoTasa })
+    : await analizarBuffer(buffer, { tipoTasa });
   for (let intento = 0; intento < 10; intento += 1) {
-    const nombreArchivo = await nombreArchivoDisponible(fileName);
+    const nombreArchivo = await nombreArchivoDisponible(fileName, tipoTasa);
     try {
       return await TasaImportacion.create({
-        tipoTasa: "AUTOMOTORES",
+        tipoTasa,
         nombreArchivo,
         nombreArchivoClave: claveNombreArchivo(nombreArchivo),
-        tamanoBytes: buffer.length,
-        hashArchivo: hashBuffer(buffer),
+        tamanoBytes: fileSize == null ? buffer.length : fileSize,
+        hashArchivo: fileHash || hashBuffer(buffer),
         formato: result.formato,
         estado: result.cantidadErrores ? "rechazada" : "analizada",
         periodos: result.periodos,
@@ -375,13 +542,97 @@ async function crearIntento({ buffer, fileName, user }) {
   throw new Error("No se pudo asignar un nombre único al archivo.");
 }
 
+async function ejecutarAnalisisArchivo({ importacionId, filePath, tipoTasa }) {
+  try {
+    await actualizarProgreso(importacionId, "analizando", 0, 0, "Validando columnas, períodos y registros.");
+    const result = await analizarArchivo(filePath, { tipoTasa });
+    await TasaImportacion.updateOne(
+      { _id: importacionId },
+      {
+        $set: {
+          formato: result.formato,
+          estado: result.cantidadErrores ? "rechazada" : "analizada",
+          periodos: result.periodos,
+          periodosActivos: [],
+          cantidadEntradas: result.cantidadEntradas,
+          cantidadObjetos: result.cantidadObjetos,
+          cantidadErrores: result.cantidadErrores,
+          cantidadAdvertencias: result.cantidadAdvertencias,
+          observaciones: result.observaciones,
+          observacionesOmitidas: result.observacionesOmitidas,
+          progresoPublicacion: {
+            etapa: "analisis_completado",
+            procesadas: result.cantidadEntradas,
+            total: result.cantidadEntradas,
+            porcentaje: 100,
+            mensaje: "El análisis se completó correctamente.",
+            error: "",
+            actualizadoAt: new Date(),
+          },
+        },
+      }
+    );
+  } catch (error) {
+    await TasaImportacion.updateOne(
+      { _id: importacionId },
+      {
+        $set: {
+          estado: "fallida",
+          "progresoPublicacion.etapa": "fallida",
+          "progresoPublicacion.error": error.message,
+          "progresoPublicacion.mensaje": "El análisis no pudo completarse.",
+          "progresoPublicacion.actualizadoAt": new Date(),
+        },
+      }
+    );
+    console.error(`Error al analizar importación ${importacionId}:`, error);
+  } finally {
+    await fs.promises.unlink(filePath).catch(() => {});
+  }
+}
+
+async function iniciarAnalisis({ filePath, fileHash, fileSize, fileName, tipoTasa = "AUTOMOTORES", user }) {
+  TasaCatalogo.requerir(tipoTasa, { importable: true });
+  for (let intento = 0; intento < 10; intento += 1) {
+    const nombreArchivo = await nombreArchivoDisponible(fileName, tipoTasa);
+    try {
+      const importacion = await TasaImportacion.create({
+        tipoTasa,
+        nombreArchivo,
+        nombreArchivoClave: claveNombreArchivo(nombreArchivo),
+        tamanoBytes: fileSize,
+        hashArchivo: fileHash,
+        formato: "desconocido",
+        estado: "analizando",
+        periodos: [],
+        periodosActivos: [],
+        subidoPor: { id: user._id, username: user.username },
+        progresoPublicacion: {
+          etapa: "en_cola",
+          procesadas: 0,
+          total: 0,
+          porcentaje: 5,
+          mensaje: "El archivo fue recibido y el análisis comenzará en instantes.",
+          error: "",
+          actualizadoAt: new Date(),
+        },
+      });
+      setImmediate(() => ejecutarAnalisisArchivo({ importacionId: importacion._id, filePath, tipoTasa }));
+      return importacion;
+    } catch (error) {
+      if (error.code !== 11000 || intento === 9) throw error;
+    }
+  }
+  throw new Error("No se pudo asignar un nombre único al archivo.");
+}
+
 async function publicar({ importacionId, buffer, confirmarReemplazo, confirmarPeriodosFuturos, guardarOriginal, user }) {
   const importacion = await TasaImportacion.findById(importacionId);
   if (!importacion) throw Object.assign(new Error("Intento de importación no encontrado."), { status: 404 });
   if (importacion.estado !== "analizada") throw Object.assign(new Error("La importación ya no puede publicarse."), { status: 409 });
   if (hashBuffer(buffer) !== importacion.hashArchivo) throw Object.assign(new Error("El archivo no coincide con el archivo analizado."), { status: 409 });
 
-  const result = await analizarBuffer(buffer, { incluirBoletas: true });
+  const result = await analizarBuffer(buffer, { incluirBoletas: true, tipoTasa: importacion.tipoTasa });
   if (result.cantidadErrores) throw Object.assign(new Error("El archivo contiene errores y no puede publicarse."), { status: 422, result });
 
   const anioActual = new Date().getFullYear();
@@ -394,7 +645,7 @@ async function publicar({ importacionId, buffer, confirmarReemplazo, confirmarPe
   }
 
   const conflictos = await TasaBoleta.distinct("periodo", {
-    tipoTasa: "AUTOMOTORES",
+    tipoTasa: importacion.tipoTasa,
     periodo: { $in: result.periodos },
     activa: true,
   });
@@ -409,7 +660,7 @@ async function publicar({ importacionId, buffer, confirmarReemplazo, confirmarPe
       result.boletas.forEach((boleta) => { boleta.importacionId = importacion._id; });
       await TasaBoleta.insertMany(result.boletas, { session });
       await TasaBoleta.updateMany(
-        { tipoTasa: "AUTOMOTORES", periodo: { $in: result.periodos }, activa: true, importacionId: { $ne: importacion._id } },
+        { tipoTasa: importacion.tipoTasa, periodo: { $in: result.periodos }, activa: true, importacionId: { $ne: importacion._id } },
         { $set: { activa: false } },
         { session }
       );
@@ -417,6 +668,7 @@ async function publicar({ importacionId, buffer, confirmarReemplazo, confirmarPe
 
       const anteriores = await TasaImportacion.find({
         _id: { $ne: importacion._id },
+        tipoTasa: importacion.tipoTasa,
         estado: { $in: ["publicada", "reemplazada_parcialmente"] },
         periodosActivos: { $in: result.periodos },
       }).session(session);
@@ -434,7 +686,7 @@ async function publicar({ importacionId, buffer, confirmarReemplazo, confirmarPe
     });
 
     let archivoOriginalError = null;
-    if (guardarOriginal && await guardarOriginalHabilitado()) {
+    if (guardarOriginal && await guardarOriginalHabilitado(importacion.tipoTasa)) {
       try {
         original = await subirOriginal(buffer, importacion, importacion.nombreArchivo);
         importacion.archivoOriginal = original;
@@ -449,9 +701,191 @@ async function publicar({ importacionId, buffer, confirmarReemplazo, confirmarPe
   }
 }
 
-async function listarPeriodosCargados() {
+async function actualizarProgreso(importacionId, etapa, procesadas, total, mensaje, error = "") {
+  const porcentaje = total ? Math.min(99, Math.round((procesadas / total) * 90)) : 0;
+  await TasaImportacion.updateOne(
+    { _id: importacionId },
+    {
+      $set: {
+        progresoPublicacion: {
+          etapa,
+          procesadas,
+          total,
+          porcentaje,
+          mensaje,
+          error,
+          actualizadoAt: new Date(),
+        },
+      },
+    }
+  );
+}
+
+async function insertarBoletasPorLotes(filePath, importacion) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+  const worksheet = workbook.worksheets[0];
+  const detected = worksheet && detectarFormato(worksheet);
+  if (!detected) throw new Error("No se pudo reconocer el formato del archivo durante la publicación.");
+
+  const batchSize = 1000;
+  let batch = [];
+  let procesadas = 0;
+  const lastRow = worksheet.actualRowCount || worksheet.rowCount;
+  await TasaBoleta.deleteMany({ importacionId: importacion._id, activa: false });
+
+  for (let rowNumber = detected.headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
+    const raw = filaComoObjeto(worksheet.getRow(rowNumber), detected.headers);
+    if (!Object.values(raw).some((value) => texto(value))) continue;
+    const boleta = detected.formato === "urbana"
+      ? construirBoletaUrbana(raw, importacion._id)
+      : construirBoleta(normalizarFila(raw, detected.formato), importacion._id, importacion.tipoTasa);
+    batch.push(boleta);
+    procesadas += 1;
+
+    if (batch.length >= batchSize) {
+      await TasaBoleta.insertMany(batch, { ordered: true });
+      batch = [];
+      await actualizarProgreso(
+        importacion._id,
+        "guardando",
+        procesadas,
+        importacion.cantidadEntradas,
+        `Guardando boletas por lotes (${procesadas.toLocaleString("es-AR")} de ${importacion.cantidadEntradas.toLocaleString("es-AR")}).`
+      );
+    }
+  }
+  if (batch.length) await TasaBoleta.insertMany(batch, { ordered: true });
+  return procesadas;
+}
+
+async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOriginal, user }) {
+  const importacion = await TasaImportacion.findById(importacionId);
+  if (!importacion) return;
+  const session = await mongoose.startSession();
+  try {
+    await actualizarProgreso(importacion._id, "preparando", 0, importacion.cantidadEntradas, "Preparando la publicación por lotes.");
+    const insertadas = await insertarBoletasPorLotes(filePath, importacion);
+    if (insertadas !== importacion.cantidadEntradas) {
+      throw new Error(`Se esperaban ${importacion.cantidadEntradas} boletas, pero se prepararon ${insertadas}.`);
+    }
+
+    await actualizarProgreso(importacion._id, "activando", insertadas, insertadas, "Activando períodos y reemplazando versiones anteriores.");
+    await session.withTransaction(async () => {
+      await TasaBoleta.updateMany(
+        { tipoTasa: importacion.tipoTasa, periodo: { $in: importacion.periodos }, activa: true, importacionId: { $ne: importacion._id } },
+        { $set: { activa: false } },
+        { session }
+      );
+      await TasaBoleta.updateMany({ importacionId: importacion._id }, { $set: { activa: true } }, { session });
+
+      const anteriores = await TasaImportacion.find({
+        _id: { $ne: importacion._id },
+        tipoTasa: importacion.tipoTasa,
+        estado: { $in: ["publicada", "reemplazada_parcialmente"] },
+        periodosActivos: { $in: importacion.periodos },
+      }).session(session);
+      for (const anterior of anteriores) {
+        anterior.periodosActivos = anterior.periodosActivos.filter((periodo) => !importacion.periodos.includes(periodo));
+        anterior.estado = anterior.periodosActivos.length ? "reemplazada_parcialmente" : "reemplazada";
+        await anterior.save({ session });
+      }
+
+      importacion.estado = "publicada";
+      importacion.periodosActivos = importacion.periodos;
+      importacion.publicadoPor = { id: user._id, username: user.username };
+      importacion.publicadoAt = new Date();
+      importacion.progresoPublicacion = {
+        etapa: "completada",
+        procesadas: insertadas,
+        total: insertadas,
+        porcentaje: 100,
+        mensaje: "La publicación se completó correctamente.",
+        error: "",
+        actualizadoAt: new Date(),
+      };
+      await importacion.save({ session });
+    });
+
+    if (guardarOriginal && await guardarOriginalHabilitado(importacion.tipoTasa)) {
+      try {
+        importacion.archivoOriginal = await subirOriginalArchivo(filePath, importacion, importacion.nombreArchivo);
+        await importacion.save();
+      } catch (error) {
+        importacion.progresoPublicacion.mensaje = `Publicación completada. No se pudo almacenar el archivo original: ${error.message}`;
+        await importacion.save();
+      }
+    }
+  } catch (error) {
+    await TasaBoleta.deleteMany({ importacionId: importacion._id, activa: false }).catch(() => {});
+    await TasaImportacion.updateOne(
+      { _id: importacion._id, estado: "publicando" },
+      {
+        $set: {
+          estado: "fallida",
+          "progresoPublicacion.etapa": "fallida",
+          "progresoPublicacion.error": error.message,
+          "progresoPublicacion.mensaje": "La publicación no pudo completarse.",
+          "progresoPublicacion.actualizadoAt": new Date(),
+        },
+      }
+    );
+    console.error(`Error al publicar importación ${importacion._id}:`, error);
+  } finally {
+    await session.endSession();
+    await fs.promises.unlink(filePath).catch(() => {});
+  }
+}
+
+async function iniciarPublicacion({ importacionId, filePath, fileHash, confirmarReemplazo, confirmarPeriodosFuturos, guardarOriginal, user }) {
+  const importacion = await TasaImportacion.findById(importacionId);
+  if (!importacion) throw Object.assign(new Error("Intento de importación no encontrado."), { status: 404 });
+  if (!["analizada", "fallida"].includes(importacion.estado)) {
+    throw Object.assign(new Error("La importación ya no puede publicarse."), { status: 409 });
+  }
+  if (fileHash !== importacion.hashArchivo) {
+    throw Object.assign(new Error("El archivo no coincide con el archivo analizado."), { status: 409 });
+  }
+
+  const anioActual = new Date().getFullYear();
+  const periodosFuturos = importacion.periodos.filter((periodo) => Number(periodo.split("/")[1]) > anioActual);
+  if (periodosFuturos.length && !confirmarPeriodosFuturos) {
+    throw Object.assign(new Error(`La carga contiene períodos posteriores al año actual (${anioActual}). Confirmá expresamente para continuar.`), { status: 409, periodosFuturos });
+  }
+  const conflictos = await TasaBoleta.distinct("periodo", {
+    tipoTasa: importacion.tipoTasa,
+    periodo: { $in: importacion.periodos },
+    activa: true,
+  });
+  if (conflictos.length && !confirmarReemplazo) {
+    throw Object.assign(new Error("Existen períodos publicados que serán reemplazados."), { status: 409, conflictos });
+  }
+
+  importacion.estado = "publicando";
+  importacion.progresoPublicacion = {
+    etapa: "en_cola",
+    procesadas: 0,
+    total: importacion.cantidadEntradas,
+    porcentaje: 0,
+    mensaje: "El archivo fue recibido y la publicación comenzará en instantes.",
+    error: "",
+    actualizadoAt: new Date(),
+  };
+  await importacion.save();
+
+  setImmediate(() => ejecutarPublicacionArchivo({
+    importacionId: importacion._id,
+    filePath,
+    guardarOriginal,
+    user: { _id: user._id, username: user.username },
+  }));
+  return importacion;
+}
+
+async function listarPeriodosCargados(tipoTasa = "AUTOMOTORES") {
+  TasaCatalogo.requerir(tipoTasa);
   return TasaBoleta.aggregate([
-    { $match: { tipoTasa: "AUTOMOTORES" } },
+    { $match: { tipoTasa } },
     {
       $group: {
         _id: { importacionId: "$importacionId", periodo: "$periodo", anio: "$anio", cuota: "$cuota" },
@@ -506,6 +940,7 @@ async function cambiarEstadoPeriodo({ importacionId, periodo, habilitar, confirm
   const conflictos = habilitar
     ? await TasaImportacion.find({
       _id: { $ne: importacion._id },
+      tipoTasa: importacion.tipoTasa,
       periodosActivos: periodo,
     }).select("_id nombreArchivo publicadoAt")
     : [];
@@ -525,7 +960,7 @@ async function cambiarEstadoPeriodo({ importacionId, periodo, habilitar, confirm
     await session.withTransaction(async () => {
       if (habilitar) {
         await TasaBoleta.updateMany(
-          { tipoTasa: "AUTOMOTORES", periodo, activa: true, importacionId: { $ne: importacion._id } },
+          { tipoTasa: importacion.tipoTasa, periodo, activa: true, importacionId: { $ne: importacion._id } },
           { $set: { activa: false } },
           { session }
         );
@@ -537,6 +972,7 @@ async function cambiarEstadoPeriodo({ importacionId, periodo, habilitar, confirm
 
         const anteriores = await TasaImportacion.find({
           _id: { $ne: importacion._id },
+          tipoTasa: importacion.tipoTasa,
           periodosActivos: periodo,
         }).session(session);
         for (const anterior of anteriores) {
@@ -609,12 +1045,13 @@ async function deshabilitarImportacion(importacionId) {
   };
 }
 
-async function actualizarConfiguracionGuardarOriginal(value) {
+async function actualizarConfiguracionGuardarOriginal(value, tipoTasa = "AUTOMOTORES") {
+  const tasa = TasaCatalogo.requerir(tipoTasa);
   return Config.findOneAndUpdate(
-    { key: "guardarArchivoOriginalTasas" },
+    { key: `guardarArchivoOriginalTasas:${tasa.codigo}` },
     {
       value: Boolean(value),
-      description: "Permite almacenar en S3 el archivo original de importaciones de tasas publicadas.",
+      description: `Permite almacenar en S3 el archivo original de importaciones de ${tasa.nombre}.`,
     },
     { new: true, upsert: true }
   );
@@ -622,10 +1059,11 @@ async function actualizarConfiguracionGuardarOriginal(value) {
 
 module.exports = {
   analizarBuffer,
+  analizarArchivo,
   nombreArchivoDisponible,
   obtenerArchivoOriginal,
-  crearIntento,
-  publicar,
+  iniciarAnalisis,
+  iniciarPublicacion,
   listarPeriodosCargados,
   cambiarEstadoPeriodo,
   deshabilitarImportacion,
