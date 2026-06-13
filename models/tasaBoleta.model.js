@@ -2,62 +2,38 @@ const { Schema, model } = require("mongoose");
 
 const tasaBoletaSchema = new Schema(
   {
-    tipoTasa: { type: String, default: "AUTOMOTORES", index: true },
-    importacionId: { type: Schema.Types.ObjectId, ref: "tasaImportacion", required: true, index: true },
-    objetoClave: { type: String, required: true, index: true },
-    anio: { type: Number, required: true, index: true },
-    cuota: { type: Number, required: true, index: true },
-    periodo: { type: String, required: true, index: true },
-    contribuyente: {
-      nombre: { type: String },
-      domicilio: { type: String },
-      localidad: { type: String },
-      codigoPostal: { type: String },
-    },
-    objeto: {
-      dominio: { type: String },
-      categoria: { type: String },
-      marca: { type: String },
-      modelo: { type: String },
-      anioModelo: { type: Number },
-      partida: { type: String },
-      catastro: { type: String },
-      parcela: { type: String },
-      metrosConstruidos: { type: Number },
-      zona: { type: String },
-    },
-    recibo: { type: String },
-    mensajeDeuda: { type: String },
-    mensajeBoleta: { type: String },
-    conceptos: [
-      {
-        codigo: { type: String },
-        nombre: { type: String },
-        importeCentavos: { type: Number },
-      },
-    ],
+    tipoTasa: { type: String, required: true },
+    importacionId: { type: Schema.Types.ObjectId, ref: "tasaImportacion", required: true },
+    objetoId: { type: Schema.Types.ObjectId, ref: "tasaObjeto", required: true },
+    objetoClave: { type: String, required: true },
+    anio: { type: Number, required: true },
+    cuota: { type: Number, required: true },
+    recibo: String,
+    conceptosCompactos: [[Number]],
     importeCentavos: { type: Number, required: true },
     vencimientos: [
       {
+        _id: false,
         orden: { type: Number, required: true },
         fecha: { type: Date, required: true },
         importeCentavos: { type: Number, required: true },
         codigoBarra: { type: String, required: true },
       },
     ],
-    codigosPago: {
-      pagoMisCuentas: { type: String },
-      redLink: { type: String },
-    },
-    activa: { type: Boolean, default: false, index: true },
+    activa: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  { timestamps: false, versionKey: false }
 );
 
+tasaBoletaSchema.virtual("periodo").get(function periodo() {
+  return `${String(this.cuota).padStart(2, "0")}/${this.anio}`;
+});
+
 tasaBoletaSchema.index(
-  { tipoTasa: 1, objetoClave: 1, anio: 1, cuota: 1, activa: 1 },
+  { tipoTasa: 1, objetoClave: 1, anio: 1, cuota: 1 },
   { unique: true, partialFilterExpression: { activa: true } }
 );
-tasaBoletaSchema.index({ tipoTasa: 1, importacionId: 1, periodo: 1, activa: 1 });
+tasaBoletaSchema.index({ importacionId: 1, anio: 1, cuota: 1, activa: 1 });
+tasaBoletaSchema.index({ tipoTasa: 1, anio: 1, cuota: 1, activa: 1 });
 
 module.exports = model("tasaBoleta", tasaBoletaSchema);

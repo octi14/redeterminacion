@@ -1,9 +1,7 @@
-const fs = require("fs");
-const path = require("path");
 const bwipjs = require("bwip-js");
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
+const TasaPdfTemplate = require("./tasaPdfTemplate.service");
 
-const TEMPLATE_PATH = path.join(__dirname, "..", "assets", "tasa-urbana-template-2026-rojo.pdf");
 const PAGE_WIDTH = 612;
 const BLACK = rgb(0.08, 0.12, 0.11);
 
@@ -137,16 +135,12 @@ async function drawTalon(page, pdf, regular, bold, boleta, column, vencimiento, 
 }
 
 exports.generar = async function generar(boletas) {
-  const template = await PDFDocument.load(fs.readFileSync(TEMPLATE_PATH));
   const output = await PDFDocument.create();
   const regular = await output.embedFont(StandardFonts.Helvetica);
   const bold = await output.embedFont(StandardFonts.HelveticaBold);
 
   for (let index = 0; index < boletas.length; index += 2) {
-    const [background] = await output.copyPages(template, [0]);
-    output.addPage(background);
-    const page = output.getPages()[output.getPageCount() - 1];
-    page.setSize(PAGE_WIDTH, 1008);
+    const page = await TasaPdfTemplate.crearPagina(output, "URBANA");
     const pair = boletas.slice(index, index + 2);
     drawHeader(page, regular, bold, pair[0]);
     for (let column = 0; column < pair.length; column += 1) {
