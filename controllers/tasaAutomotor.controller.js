@@ -1,6 +1,8 @@
 const TasaBoleta = require("../models/tasaBoleta.model");
 const TasaAutomotorPdf = require("../services/tasaAutomotorPdf.service");
 
+const MAX_PERIODOS_POR_DESCARGA = 20;
+
 function normalizarDominio(value) {
   return String(value || "").replace(/[\s-]/g, "").toUpperCase();
 }
@@ -31,6 +33,7 @@ exports.buscar = async function buscar(req, res) {
       data: {
         dominio,
         vehiculo: boletas[0].objeto,
+        maxPeriodosPorDescarga: MAX_PERIODOS_POR_DESCARGA,
         periodos: boletas.map((boleta) => ({
           periodo: boleta.periodo,
           anio: boleta.anio,
@@ -54,8 +57,13 @@ exports.descargar = async function descargar(req, res) {
     const dominio = validarDominio(req, res);
     if (!dominio) return;
     const periodos = Array.isArray(req.body.periodos) ? [...new Set(req.body.periodos)] : [];
-    if (!periodos.length || periodos.length > 24) {
-      return res.status(400).json({ message: "Seleccioná entre 1 y 24 períodos." });
+    if (!periodos.length) {
+      return res.status(400).json({ message: "Seleccioná al menos un período para generar el PDF." });
+    }
+    if (periodos.length > MAX_PERIODOS_POR_DESCARGA) {
+      return res.status(400).json({
+        message: `Seleccionaste ${periodos.length} períodos. El máximo permitido por descarga es ${MAX_PERIODOS_POR_DESCARGA}.`,
+      });
     }
     const boletas = await TasaBoleta.find({
       tipoTasa: "AUTOMOTORES",

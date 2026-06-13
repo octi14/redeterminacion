@@ -262,6 +262,40 @@ function hashBuffer(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
+function escaparRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function nombreArchivoDisponible(fileName) {
+  const limpio = texto(fileName).split(/[\\/]/).pop() || "automotores.xlsx";
+  const extensionIndex = limpio.lastIndexOf(".");
+  const extension = extensionIndex > 0 ? limpio.slice(extensionIndex) : "";
+  const nombre = extensionIndex > 0 ? limpio.slice(0, extensionIndex) : limpio;
+  const nombreBase = nombre.replace(/--\d+$/, "");
+  const coincidenciaFamilia = new RegExp(
+    `^${escaparRegex(nombreBase)}(?:--(\\d+))?${escaparRegex(extension)}$`,
+    "i"
+  );
+  const existentes = await TasaImportacion.find({
+    tipoTasa: "AUTOMOTORES",
+    nombreArchivo: coincidenciaFamilia,
+  }).select("nombreArchivo").lean();
+
+  if (!existentes.some((item) => item.nombreArchivo.toLocaleLowerCase() === limpio.toLocaleLowerCase())) {
+    return limpio;
+  }
+
+  const numeros = existentes.map((item) => {
+    const match = item.nombreArchivo.match(coincidenciaFamilia);
+    return match && match[1] ? Number(match[1]) : 1;
+  });
+  return `${nombreBase}--${Math.max(1, ...numeros) + 1}${extension}`;
+}
+
+function claveNombreArchivo(fileName) {
+  return texto(fileName).toLocaleLowerCase();
+}
+
 async function guardarOriginalHabilitado() {
   const config = await Config.findOne({ key: "guardarArchivoOriginalTasas" });
   return Boolean(config && config.value === true);
@@ -286,24 +320,32 @@ async function subirOriginal(buffer, importacion, fileName) {
 
 async function crearIntento({ buffer, fileName, user }) {
   const result = await analizarBuffer(buffer);
-  const importacion = await TasaImportacion.create({
-    tipoTasa: "AUTOMOTORES",
-    nombreArchivo: fileName,
-    tamanoBytes: buffer.length,
-    hashArchivo: hashBuffer(buffer),
-    formato: result.formato,
-    estado: result.cantidadErrores ? "rechazada" : "analizada",
-    periodos: result.periodos,
-    periodosActivos: [],
-    cantidadEntradas: result.cantidadEntradas,
-    cantidadObjetos: result.cantidadObjetos,
-    cantidadErrores: result.cantidadErrores,
-    cantidadAdvertencias: result.cantidadAdvertencias,
-    observaciones: result.observaciones,
-    observacionesOmitidas: result.observacionesOmitidas,
-    subidoPor: { id: user._id, username: user.username },
-  });
-  return importacion;
+  for (let intento = 0; intento < 10; intento += 1) {
+    const nombreArchivo = await nombreArchivoDisponible(fileName);
+    try {
+      return await TasaImportacion.create({
+        tipoTasa: "AUTOMOTORES",
+        nombreArchivo,
+        nombreArchivoClave: claveNombreArchivo(nombreArchivo),
+        tamanoBytes: buffer.length,
+        hashArchivo: hashBuffer(buffer),
+        formato: result.formato,
+        estado: result.cantidadErrores ? "rechazada" : "analizada",
+        periodos: result.periodos,
+        periodosActivos: [],
+        cantidadEntradas: result.cantidadEntradas,
+        cantidadObjetos: result.cantidadObjetos,
+        cantidadErrores: result.cantidadErrores,
+        cantidadAdvertencias: result.cantidadAdvertencias,
+        observaciones: result.observaciones,
+        observacionesOmitidas: result.observacionesOmitidas,
+        subidoPor: { id: user._id, username: user.username },
+      });
+    } catch (error) {
+      if (error.code !== 11000 || intento === 9) throw error;
+    }
+  }
+  throw new Error("No se pudo asignar un nombre único al archivo.");
 }
 
 async function publicar({ importacionId, buffer, confirmarReemplazo, guardarOriginal, user }) {
@@ -371,6 +413,128 @@ async function publicar({ importacionId, buffer, confirmarReemplazo, guardarOrig
   }
 }
 
+async function listarPeriodosCargados() {
+  return TasaBoleta.aggregate([
+    { $match: { tipoTasa: "AUTOMOTORES" } },
+    {
+      $group: {
+        _id: { importacionId: "$importacionId", periodo: "$periodo", anio: "$anio", cuota: "$cuota" },
+        cantidadEntradas: { $sum: 1 },
+        cantidadActivas: { $sum: { $cond: ["$activa", 1, 0] } },
+        actualizadoAt: { $max: "$updatedAt" },
+      },
+    },
+    {
+      $lookup: {
+        from: TasaImportacion.collection.name,
+        localField: "_id.importacionId",
+        foreignField: "_id",
+        as: "importacion",
+      },
+    },
+    { $unwind: "$importacion" },
+    {
+      $project: {
+        _id: 0,
+        importacionId: "$_id.importacionId",
+        periodo: "$_id.periodo",
+        anio: "$_id.anio",
+        cuota: "$_id.cuota",
+        cantidadEntradas: 1,
+        habilitado: { $eq: ["$cantidadActivas", "$cantidadEntradas"] },
+        actualizadoAt: 1,
+        nombreArchivo: "$importacion.nombreArchivo",
+        publicadoAt: "$importacion.publicadoAt",
+        publicadoPor: "$importacion.publicadoPor.username",
+      },
+    },
+    { $sort: { anio: -1, cuota: 1, habilitado: -1, publicadoAt: -1 } },
+  ]);
+}
+
+async function cambiarEstadoPeriodo({ importacionId, periodo, habilitar, confirmarReemplazo }) {
+  const importacion = await TasaImportacion.findById(importacionId);
+  if (!importacion || !importacion.periodos.includes(periodo)) {
+    throw Object.assign(new Error("La carga seleccionada no contiene ese período."), { status: 404 });
+  }
+
+  const objetivo = await TasaBoleta.countDocuments({ importacionId, periodo });
+  if (!objetivo) {
+    throw Object.assign(new Error("No hay boletas almacenadas para ese período."), { status: 404 });
+  }
+
+  const conflictos = habilitar
+    ? await TasaImportacion.find({
+      _id: { $ne: importacion._id },
+      periodosActivos: periodo,
+    }).select("_id nombreArchivo publicadoAt")
+    : [];
+  if (conflictos.length && !confirmarReemplazo) {
+    const error = new Error("Habilitar este período desactivará otra carga actualmente habilitada.");
+    error.status = 409;
+    error.conflictos = conflictos.map((item) => ({
+      importacionId: item._id,
+      nombreArchivo: item.nombreArchivo,
+      publicadoAt: item.publicadoAt,
+    }));
+    throw error;
+  }
+
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      if (habilitar) {
+        await TasaBoleta.updateMany(
+          { tipoTasa: "AUTOMOTORES", periodo, activa: true, importacionId: { $ne: importacion._id } },
+          { $set: { activa: false } },
+          { session }
+        );
+        await TasaBoleta.updateMany(
+          { importacionId: importacion._id, periodo },
+          { $set: { activa: true } },
+          { session }
+        );
+
+        const anteriores = await TasaImportacion.find({
+          _id: { $ne: importacion._id },
+          periodosActivos: periodo,
+        }).session(session);
+        for (const anterior of anteriores) {
+          anterior.periodosActivos = anterior.periodosActivos.filter((item) => item !== periodo);
+          anterior.estado = anterior.periodosActivos.length ? "reemplazada_parcialmente" : "reemplazada";
+          await anterior.save({ session });
+        }
+        if (!importacion.periodosActivos.includes(periodo)) importacion.periodosActivos.push(periodo);
+        importacion.estado = importacion.periodosActivos.length === importacion.periodos.length
+          ? "publicada"
+          : "reemplazada_parcialmente";
+      } else {
+        await TasaBoleta.updateMany(
+          { importacionId: importacion._id, periodo },
+          { $set: { activa: false } },
+          { session }
+        );
+        importacion.periodosActivos = importacion.periodosActivos.filter((item) => item !== periodo);
+        importacion.estado = importacion.periodosActivos.length ? "reemplazada_parcialmente" : "reemplazada";
+      }
+      await importacion.save({ session });
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  return {
+    periodo,
+    habilitado: Boolean(habilitar),
+    cantidadEntradas: objetivo,
+    desactivadas: conflictos.map((item) => ({
+      importacionId: item._id,
+      nombreArchivo: item.nombreArchivo,
+      publicadoAt: item.publicadoAt,
+    })),
+  };
+}
+
 async function actualizarConfiguracionGuardarOriginal(value) {
   return Config.findOneAndUpdate(
     { key: "guardarArchivoOriginalTasas" },
@@ -384,8 +548,11 @@ async function actualizarConfiguracionGuardarOriginal(value) {
 
 module.exports = {
   analizarBuffer,
+  nombreArchivoDisponible,
   crearIntento,
   publicar,
+  listarPeriodosCargados,
+  cambiarEstadoPeriodo,
   guardarOriginalHabilitado,
   actualizarConfiguracionGuardarOriginal,
 };

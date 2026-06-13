@@ -14,6 +14,7 @@ const tasaImportacionSchema = new Schema(
   {
     tipoTasa: { type: String, default: "AUTOMOTORES", index: true },
     nombreArchivo: { type: String, required: true },
+    nombreArchivoClave: { type: String },
     tamanoBytes: { type: Number, default: 0 },
     hashArchivo: { type: String, required: true, index: true },
     formato: { type: String, enum: ["completo", "simplificado", "desconocido"], required: true },
@@ -47,6 +48,14 @@ const tasaImportacionSchema = new Schema(
     },
   },
   { timestamps: true }
+);
+
+tasaImportacionSchema.index(
+  { tipoTasa: 1, nombreArchivoClave: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { nombreArchivoClave: { $type: "string" } },
+  }
 );
 
 module.exports = model("tasaImportacion", tasaImportacionSchema);
