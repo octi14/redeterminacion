@@ -17,10 +17,10 @@ const tasaImportacionSchema = new Schema(
     nombreArchivoClave: { type: String },
     tamanoBytes: { type: Number, default: 0 },
     hashArchivo: { type: String, required: true, index: true },
-    formato: { type: String, enum: ["completo", "simplificado", "desconocido"], required: true },
+    formato: { type: String, enum: ["completo", "simplificado", "urbana", "desconocido"], required: true },
     estado: {
       type: String,
-      enum: ["analizada", "rechazada", "publicada", "reemplazada", "reemplazada_parcialmente", "deshabilitada"],
+      enum: ["analizando", "analizada", "rechazada", "publicando", "fallida", "publicada", "reemplazada", "reemplazada_parcialmente", "deshabilitada"],
       required: true,
       index: true,
     },
@@ -41,6 +41,15 @@ const tasaImportacionSchema = new Schema(
       username: { type: String },
     },
     publicadoAt: { type: Date },
+    progresoPublicacion: {
+      etapa: { type: String },
+      procesadas: { type: Number, default: 0 },
+      total: { type: Number, default: 0 },
+      porcentaje: { type: Number, default: 0 },
+      mensaje: { type: String },
+      error: { type: String },
+      actualizadoAt: { type: Date },
+    },
     archivoOriginal: {
       almacenado: { type: Boolean, default: false },
       url: { type: String },
