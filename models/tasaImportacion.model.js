@@ -20,7 +20,7 @@ const tasaImportacionSchema = new Schema(
     formato: { type: String, enum: ["completo", "simplificado", "desconocido"], required: true },
     estado: {
       type: String,
-      enum: ["analizada", "rechazada", "publicada", "reemplazada", "reemplazada_parcialmente"],
+      enum: ["analizada", "rechazada", "publicada", "reemplazada", "reemplazada_parcialmente", "deshabilitada"],
       required: true,
       index: true,
     },

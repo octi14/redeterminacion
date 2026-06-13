@@ -16,6 +16,8 @@ router.get("/configuracion", Controller.obtenerConfiguracion);
 router.put("/configuracion", Controller.actualizarConfiguracion);
 router.get("/:id", Controller.obtener);
 router.get("/:id/reporte", Controller.reporte);
+router.get("/:id/original", Controller.archivoOriginal);
+router.put("/:id/deshabilitar", Controller.deshabilitar);
 router.post("/analizar", xlsxBody, Controller.analizar);
 router.post("/:id/publicar", xlsxBody, Controller.publicar);
 

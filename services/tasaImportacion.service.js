@@ -318,6 +318,33 @@ async function subirOriginal(buffer, importacion, fileName) {
   return { almacenado: true, key, url: uploaded.Location };
 }
 
+async function obtenerArchivoOriginal(importacionId) {
+  const importacion = await TasaImportacion.findById(importacionId)
+    .select("nombreArchivo archivoOriginal")
+    .lean();
+  if (!importacion) {
+    throw Object.assign(new Error("La carga seleccionada no existe."), { status: 404 });
+  }
+  if (!importacion.archivoOriginal?.almacenado || !importacion.archivoOriginal.key) {
+    throw Object.assign(new Error("El archivo original no está disponible para esta carga."), { status: 404 });
+  }
+
+  const s3 = new AWS.S3({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION,
+  });
+  const object = await s3.getObject({
+    Bucket: S3_BUCKET,
+    Key: importacion.archivoOriginal.key,
+  }).promise();
+  return {
+    nombreArchivo: importacion.nombreArchivo,
+    contentType: object.ContentType || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    body: object.Body,
+  };
+}
+
 async function crearIntento({ buffer, fileName, user }) {
   const result = await analizarBuffer(buffer);
   for (let intento = 0; intento < 10; intento += 1) {
@@ -348,7 +375,7 @@ async function crearIntento({ buffer, fileName, user }) {
   throw new Error("No se pudo asignar un nombre único al archivo.");
 }
 
-async function publicar({ importacionId, buffer, confirmarReemplazo, guardarOriginal, user }) {
+async function publicar({ importacionId, buffer, confirmarReemplazo, confirmarPeriodosFuturos, guardarOriginal, user }) {
   const importacion = await TasaImportacion.findById(importacionId);
   if (!importacion) throw Object.assign(new Error("Intento de importación no encontrado."), { status: 404 });
   if (importacion.estado !== "analizada") throw Object.assign(new Error("La importación ya no puede publicarse."), { status: 409 });
@@ -356,6 +383,15 @@ async function publicar({ importacionId, buffer, confirmarReemplazo, guardarOrig
 
   const result = await analizarBuffer(buffer, { incluirBoletas: true });
   if (result.cantidadErrores) throw Object.assign(new Error("El archivo contiene errores y no puede publicarse."), { status: 422, result });
+
+  const anioActual = new Date().getFullYear();
+  const periodosFuturos = result.periodos.filter((periodo) => Number(periodo.split("/")[1]) > anioActual);
+  if (periodosFuturos.length && !confirmarPeriodosFuturos) {
+    throw Object.assign(
+      new Error(`La carga contiene períodos posteriores al año actual (${anioActual}). Confirmá expresamente para continuar.`),
+      { status: 409, periodosFuturos }
+    );
+  }
 
   const conflictos = await TasaBoleta.distinct("periodo", {
     tipoTasa: "AUTOMOTORES",
@@ -444,6 +480,7 @@ async function listarPeriodosCargados() {
         habilitado: { $eq: ["$cantidadActivas", "$cantidadEntradas"] },
         actualizadoAt: 1,
         nombreArchivo: "$importacion.nombreArchivo",
+        estadoImportacion: "$importacion.estado",
         publicadoAt: "$importacion.publicadoAt",
         publicadoPor: "$importacion.publicadoPor.username",
       },
@@ -456,6 +493,9 @@ async function cambiarEstadoPeriodo({ importacionId, periodo, habilitar, confirm
   const importacion = await TasaImportacion.findById(importacionId);
   if (!importacion || !importacion.periodos.includes(periodo)) {
     throw Object.assign(new Error("La carga seleccionada no contiene ese período."), { status: 404 });
+  }
+  if (importacion.estado === "deshabilitada") {
+    throw Object.assign(new Error("La carga está deshabilitada y sus períodos no pueden volver a habilitarse."), { status: 409 });
   }
 
   const objetivo = await TasaBoleta.countDocuments({ importacionId, periodo });
@@ -535,6 +575,40 @@ async function cambiarEstadoPeriodo({ importacionId, periodo, habilitar, confirm
   };
 }
 
+async function deshabilitarImportacion(importacionId) {
+  const importacion = await TasaImportacion.findById(importacionId);
+  if (!importacion) {
+    throw Object.assign(new Error("La carga seleccionada no existe."), { status: 404 });
+  }
+  if (importacion.estado === "deshabilitada") {
+    throw Object.assign(new Error("La carga ya se encuentra deshabilitada."), { status: 409 });
+  }
+
+  const session = await mongoose.startSession();
+  let boletasDeshabilitadas = 0;
+  try {
+    await session.withTransaction(async () => {
+      const update = await TasaBoleta.updateMany(
+        { importacionId: importacion._id, activa: true },
+        { $set: { activa: false } },
+        { session }
+      );
+      boletasDeshabilitadas = update.modifiedCount || update.nModified || 0;
+      importacion.periodosActivos = [];
+      importacion.estado = "deshabilitada";
+      await importacion.save({ session });
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  return {
+    importacionId: importacion._id,
+    estado: importacion.estado,
+    boletasDeshabilitadas,
+  };
+}
+
 async function actualizarConfiguracionGuardarOriginal(value) {
   return Config.findOneAndUpdate(
     { key: "guardarArchivoOriginalTasas" },
@@ -549,10 +623,12 @@ async function actualizarConfiguracionGuardarOriginal(value) {
 module.exports = {
   analizarBuffer,
   nombreArchivoDisponible,
+  obtenerArchivoOriginal,
   crearIntento,
   publicar,
   listarPeriodosCargados,
   cambiarEstadoPeriodo,
+  deshabilitarImportacion,
   guardarOriginalHabilitado,
   actualizarConfiguracionGuardarOriginal,
 };
