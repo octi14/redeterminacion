@@ -10,6 +10,8 @@ const xlsxBody = express.raw({
 
 router.use(requireMaster);
 router.get("/", Controller.listar);
+router.get("/periodos", Controller.listarPeriodos);
+router.put("/periodos/:importacionId/estado", Controller.cambiarEstadoPeriodo);
 router.get("/configuracion", Controller.obtenerConfiguracion);
 router.put("/configuracion", Controller.actualizarConfiguracion);
 router.get("/:id", Controller.obtener);

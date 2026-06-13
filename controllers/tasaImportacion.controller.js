@@ -56,7 +56,7 @@ exports.listar = async function (_req, res) {
     const imports = await TasaImportacion.find()
       .select("-observaciones")
       .sort({ createdAt: -1 })
-      .limit(100);
+      .limit(2000);
     return res.status(200).json({ data: imports });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -118,5 +118,31 @@ exports.actualizarConfiguracion = async function (req, res) {
     return res.status(200).json({ data: config });
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  }
+};
+
+exports.listarPeriodos = async function (_req, res) {
+  try {
+    const periodos = await TasaImportacionService.listarPeriodosCargados();
+    return res.status(200).json({ data: periodos });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+exports.cambiarEstadoPeriodo = async function (req, res) {
+  try {
+    const result = await TasaImportacionService.cambiarEstadoPeriodo({
+      importacionId: req.params.importacionId,
+      periodo: req.body.periodo,
+      habilitar: req.body.habilitar === true,
+      confirmarReemplazo: req.body.confirmarReemplazo === true,
+    });
+    return res.status(200).json({ data: result });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      message: error.message,
+      conflictos: error.conflictos || [],
+    });
   }
 };
