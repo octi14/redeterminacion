@@ -7,6 +7,11 @@ const TASAS = [
     icono: "car-front-fill",
     formatos: ["completo", "simplificado"],
     importacionHabilitada: true,
+    tema: {
+      principal: "#13875e",
+      oscuro: "#075e4a",
+      suave: "#e3f5ed",
+    },
   },
   {
     codigo: "URBANA",
@@ -16,6 +21,11 @@ const TASAS = [
     icono: "building",
     formatos: ["urbana"],
     importacionHabilitada: true,
+    tema: {
+      principal: "#bd3041",
+      oscuro: "#771a28",
+      suave: "#fbdde1",
+    },
   },
 ];
 

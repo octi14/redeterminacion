@@ -6,6 +6,8 @@ const mongoose = require("mongoose");
 const Config = require("../models/configs.model");
 const TasaImportacion = require("../models/tasaImportacion.model");
 const TasaBoleta = require("../models/tasaBoleta.model");
+const TasaObjeto = require("../models/tasaObjeto.model");
+const TasaMensaje = require("../models/tasaMensaje.model");
 const TasaCatalogo = require("./tasaCatalogo.service");
 
 const MAX_OBSERVACIONES = 5000;
@@ -167,31 +169,33 @@ function construirBoleta(row, importacionId, tipoTasa = "AUTOMOTORES") {
     objetoClave: dominio,
     anio,
     cuota: mes,
-    periodo: `${String(mes).padStart(2, "0")}/${anio}`,
-    contribuyente: {
+    _datosObjeto: {
+      contribuyente: {
       nombre: texto(row.Contribuyente),
       domicilio: texto(row.Domicilio),
       localidad: texto(row.Localidad),
       codigoPostal: texto(row.CP),
-    },
-    objeto: {
-      dominio,
-      categoria: texto(row.Categoria),
-      marca: texto(row.Marca),
-      modelo: texto(row.Modelo),
-      anioModelo: Number(row.Model) || undefined,
+      },
+      objeto: {
+        dominio,
+        categoria: texto(row.Categoria),
+        marca: texto(row.Marca),
+        modelo: texto(row.Modelo),
+        anioModelo: Number(row.Model) || undefined,
+      },
+      mensajeDeuda: texto(row.DeudaTexto),
+      mensajeBoleta: "",
+      codigosPago: {
+        pagoMisCuentas: texto(row["Pago Mis Cuentas"]),
+        redLink: texto(row["Red Link"]),
+      },
     },
     recibo: texto(row.Recibo),
-    mensajeDeuda: texto(row.DeudaTexto),
     importeCentavos: importeCentavos(row.Patente),
     vencimientos: [
       { orden: 1, fecha: fecha(row["1er.Vto."]), importeCentavos: importeCentavos(row["$ 1er.Vto."]), codigoBarra: bars[0] },
       { orden: 2, fecha: fecha(row["2do.Vto."]), importeCentavos: importeCentavos(row["$ 2do.Vto."]), codigoBarra: bars[1] },
     ],
-    codigosPago: {
-      pagoMisCuentas: texto(row["Pago Mis Cuentas"]),
-      redLink: texto(row["Red Link"]),
-    },
     activa: false,
   };
 }
@@ -206,35 +210,36 @@ function construirBoletaUrbana(row, importacionId) {
     objetoClave: partida,
     anio,
     cuota: mes,
-    periodo: `${String(mes).padStart(2, "0")}/${anio}`,
-    contribuyente: {
-      nombre: texto(row.Titular),
-      domicilio: texto(row.Domicilio),
-      localidad: texto(row.Localidad),
-      codigoPostal: texto(row["C.P."]),
-    },
-    objeto: {
-      partida,
-      catastro: texto(row.Catastro),
-      parcela: texto(row.Parcela),
-      metrosConstruidos: Number(row.Const) || undefined,
-      zona: texto(row.Zon),
+    _datosObjeto: {
+      contribuyente: {
+        nombre: texto(row.Titular),
+        domicilio: texto(row.Domicilio),
+        localidad: texto(row.Localidad),
+        codigoPostal: texto(row["C.P."]),
+      },
+      objeto: {
+        partida,
+        catastro: texto(row.Catastro),
+        parcela: texto(row.Parcela),
+        metrosConstruidos: Number(row.Const) || undefined,
+        zona: texto(row.Zon),
+      },
+      mensajeDeuda: texto(row.DeudaTexto),
+      mensajeBoleta: texto(row["TEXTO-2"]),
+      codigosPago: {
+        pagoMisCuentas: texto(row.Banelco),
+        redLink: texto(row.RedLink),
+      },
     },
     recibo: texto(row.Recibo),
-    mensajeDeuda: texto(row.DeudaTexto),
-    mensajeBoleta: texto(row["TEXTO-2"]),
-    conceptos: CONCEPTOS_URBANA
-      .map(([codigo, nombre]) => ({ codigo, nombre, importeCentavos: importeCentavos(row[codigo]) }))
-      .filter((item) => item.importeCentavos != null && item.importeCentavos !== 0),
+    conceptosCompactos: CONCEPTOS_URBANA
+      .map(([codigo], index) => [index, importeCentavos(row[codigo])])
+      .filter((item) => item[1] != null && item[1] !== 0),
     importeCentavos: importeCentavos(row["$1erVto"]),
     vencimientos: [
       { orden: 1, fecha: fecha(row["F-1erVto"]), importeCentavos: importeCentavos(row["$1erVto"]), codigoBarra: texto(row["CodBarra-1erVto"]) },
       { orden: 2, fecha: fecha(row["F-2doVto"]), importeCentavos: importeCentavos(row["$2doVto"]), codigoBarra: texto(row["CodBarra-2doVto"]) },
     ],
-    codigosPago: {
-      pagoMisCuentas: texto(row.Banelco),
-      redLink: texto(row.RedLink),
-    },
     activa: false,
   };
 }
@@ -401,8 +406,21 @@ function analizarArchivo(filePath, options) {
   return analizarFuente(filePath, options);
 }
 
-function hashBuffer(buffer) {
-  return crypto.createHash("sha256").update(buffer).digest("hex");
+function periodoPartes(periodo) {
+  const [cuota, anio] = String(periodo).split("/").map(Number);
+  return { anio, cuota };
+}
+
+function filtroPeriodos(periodos) {
+  return { $or: periodos.map(periodoPartes) };
+}
+
+async function periodosActivosExistentes(tipoTasa, periodos) {
+  const rows = await TasaBoleta.aggregate([
+    { $match: { tipoTasa, activa: true, ...filtroPeriodos(periodos) } },
+    { $group: { _id: { anio: "$anio", cuota: "$cuota" } } },
+  ]);
+  return rows.map((row) => `${String(row._id.cuota).padStart(2, "0")}/${row._id.anio}`);
 }
 
 function escaparRegex(value) {
@@ -448,23 +466,6 @@ async function guardarOriginalHabilitado(tipoTasa = "AUTOMOTORES") {
   return Boolean(config && config.value === true);
 }
 
-async function subirOriginal(buffer, importacion, fileName) {
-  const s3 = new AWS.S3({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION,
-  });
-  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const key = `tasas/${importacion.tipoTasa.toLocaleLowerCase()}/${importacion._id}/${safeName}`;
-  const uploaded = await s3.upload({
-    Bucket: S3_BUCKET,
-    Key: key,
-    Body: buffer,
-    ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  }).promise();
-  return { almacenado: true, key, url: uploaded.Location };
-}
-
 async function subirOriginalArchivo(filePath, importacion, fileName) {
   const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -507,39 +508,6 @@ async function obtenerArchivoOriginal(importacionId) {
     contentType: object.ContentType || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     body: object.Body,
   };
-}
-
-async function crearIntento({ buffer, filePath, fileHash, fileSize, fileName, tipoTasa = "AUTOMOTORES", user }) {
-  TasaCatalogo.requerir(tipoTasa, { importable: true });
-  const result = filePath
-    ? await analizarArchivo(filePath, { tipoTasa })
-    : await analizarBuffer(buffer, { tipoTasa });
-  for (let intento = 0; intento < 10; intento += 1) {
-    const nombreArchivo = await nombreArchivoDisponible(fileName, tipoTasa);
-    try {
-      return await TasaImportacion.create({
-        tipoTasa,
-        nombreArchivo,
-        nombreArchivoClave: claveNombreArchivo(nombreArchivo),
-        tamanoBytes: fileSize == null ? buffer.length : fileSize,
-        hashArchivo: fileHash || hashBuffer(buffer),
-        formato: result.formato,
-        estado: result.cantidadErrores ? "rechazada" : "analizada",
-        periodos: result.periodos,
-        periodosActivos: [],
-        cantidadEntradas: result.cantidadEntradas,
-        cantidadObjetos: result.cantidadObjetos,
-        cantidadErrores: result.cantidadErrores,
-        cantidadAdvertencias: result.cantidadAdvertencias,
-        observaciones: result.observaciones,
-        observacionesOmitidas: result.observacionesOmitidas,
-        subidoPor: { id: user._id, username: user.username },
-      });
-    } catch (error) {
-      if (error.code !== 11000 || intento === 9) throw error;
-    }
-  }
-  throw new Error("No se pudo asignar un nombre único al archivo.");
 }
 
 async function ejecutarAnalisisArchivo({ importacionId, filePath, tipoTasa }) {
@@ -626,81 +594,6 @@ async function iniciarAnalisis({ filePath, fileHash, fileSize, fileName, tipoTas
   throw new Error("No se pudo asignar un nombre único al archivo.");
 }
 
-async function publicar({ importacionId, buffer, confirmarReemplazo, confirmarPeriodosFuturos, guardarOriginal, user }) {
-  const importacion = await TasaImportacion.findById(importacionId);
-  if (!importacion) throw Object.assign(new Error("Intento de importación no encontrado."), { status: 404 });
-  if (importacion.estado !== "analizada") throw Object.assign(new Error("La importación ya no puede publicarse."), { status: 409 });
-  if (hashBuffer(buffer) !== importacion.hashArchivo) throw Object.assign(new Error("El archivo no coincide con el archivo analizado."), { status: 409 });
-
-  const result = await analizarBuffer(buffer, { incluirBoletas: true, tipoTasa: importacion.tipoTasa });
-  if (result.cantidadErrores) throw Object.assign(new Error("El archivo contiene errores y no puede publicarse."), { status: 422, result });
-
-  const anioActual = new Date().getFullYear();
-  const periodosFuturos = result.periodos.filter((periodo) => Number(periodo.split("/")[1]) > anioActual);
-  if (periodosFuturos.length && !confirmarPeriodosFuturos) {
-    throw Object.assign(
-      new Error(`La carga contiene períodos posteriores al año actual (${anioActual}). Confirmá expresamente para continuar.`),
-      { status: 409, periodosFuturos }
-    );
-  }
-
-  const conflictos = await TasaBoleta.distinct("periodo", {
-    tipoTasa: importacion.tipoTasa,
-    periodo: { $in: result.periodos },
-    activa: true,
-  });
-  if (conflictos.length && !confirmarReemplazo) {
-    throw Object.assign(new Error("Existen períodos publicados que serán reemplazados."), { status: 409, conflictos });
-  }
-
-  const session = await mongoose.startSession();
-  let original = { almacenado: false };
-  try {
-    await session.withTransaction(async () => {
-      result.boletas.forEach((boleta) => { boleta.importacionId = importacion._id; });
-      await TasaBoleta.insertMany(result.boletas, { session });
-      await TasaBoleta.updateMany(
-        { tipoTasa: importacion.tipoTasa, periodo: { $in: result.periodos }, activa: true, importacionId: { $ne: importacion._id } },
-        { $set: { activa: false } },
-        { session }
-      );
-      await TasaBoleta.updateMany({ importacionId: importacion._id }, { $set: { activa: true } }, { session });
-
-      const anteriores = await TasaImportacion.find({
-        _id: { $ne: importacion._id },
-        tipoTasa: importacion.tipoTasa,
-        estado: { $in: ["publicada", "reemplazada_parcialmente"] },
-        periodosActivos: { $in: result.periodos },
-      }).session(session);
-      for (const anterior of anteriores) {
-        anterior.periodosActivos = anterior.periodosActivos.filter((periodo) => !result.periodos.includes(periodo));
-        anterior.estado = anterior.periodosActivos.length ? "reemplazada_parcialmente" : "reemplazada";
-        await anterior.save({ session });
-      }
-
-      importacion.estado = "publicada";
-      importacion.periodosActivos = result.periodos;
-      importacion.publicadoPor = { id: user._id, username: user.username };
-      importacion.publicadoAt = new Date();
-      await importacion.save({ session });
-    });
-
-    let archivoOriginalError = null;
-    if (guardarOriginal && await guardarOriginalHabilitado(importacion.tipoTasa)) {
-      try {
-        original = await subirOriginal(buffer, importacion, importacion.nombreArchivo);
-        importacion.archivoOriginal = original;
-        await importacion.save();
-      } catch (error) {
-        archivoOriginalError = error.message;
-      }
-    }
-    return { importacion, conflictos, archivoOriginal: original, archivoOriginalError };
-  } finally {
-    await session.endSession();
-  }
-}
-
 async function actualizarProgreso(importacionId, etapa, procesadas, total, mensaje, error = "") {
   const porcentaje = total ? Math.min(99, Math.round((procesadas / total) * 90)) : 0;
   await TasaImportacion.updateOne(
@@ -734,6 +627,51 @@ async function insertarBoletasPorLotes(filePath, importacion) {
   const lastRow = worksheet.actualRowCount || worksheet.rowCount;
   await TasaBoleta.deleteMany({ importacionId: importacion._id, activa: false });
 
+  async function guardarLote(boletas) {
+    const mensajes = new Map();
+    const objetos = new Map();
+    for (const boleta of boletas) {
+      const datos = boleta._datosObjeto;
+      const mensaje = datos.mensajeBoleta || "";
+      const hash = crypto.createHash("sha256").update(mensaje).digest("hex");
+      mensajes.set(hash, mensaje);
+      objetos.set(boleta.objetoClave, { ...datos, mensajeHash: hash });
+    }
+    if (mensajes.size) {
+      await TasaMensaje.bulkWrite(Array.from(mensajes, ([hash, mensaje]) => ({
+        updateOne: { filter: { hash }, update: { $setOnInsert: { hash, texto: mensaje } }, upsert: true },
+      })), { ordered: false });
+    }
+    const mensajesGuardados = await TasaMensaje.find({ hash: { $in: Array.from(mensajes.keys()) } }).select("_id hash").lean();
+    const mensajeIds = new Map(mensajesGuardados.map((item) => [item.hash, item._id]));
+    await TasaObjeto.bulkWrite(Array.from(objetos, ([objetoClave, datos]) => ({
+      updateOne: {
+        filter: { importacionId: importacion._id, objetoClave },
+        update: {
+          $set: {
+            tipoTasa: importacion.tipoTasa,
+            contribuyente: datos.contribuyente,
+            objeto: datos.objeto,
+            mensajeDeuda: datos.mensajeDeuda,
+            mensajeBoletaId: mensajeIds.get(datos.mensajeHash),
+            codigosPago: datos.codigosPago,
+          },
+        },
+        upsert: true,
+      },
+    })), { ordered: false });
+    const objetosGuardados = await TasaObjeto.find({
+      importacionId: importacion._id,
+      objetoClave: { $in: Array.from(objetos.keys()) },
+    }).select("_id objetoClave").lean();
+    const objetoIds = new Map(objetosGuardados.map((item) => [item.objetoClave, item._id]));
+    boletas.forEach((boleta) => {
+      boleta.objetoId = objetoIds.get(boleta.objetoClave);
+      delete boleta._datosObjeto;
+    });
+    await TasaBoleta.insertMany(boletas, { ordered: true });
+  }
+
   for (let rowNumber = detected.headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
     const raw = filaComoObjeto(worksheet.getRow(rowNumber), detected.headers);
     if (!Object.values(raw).some((value) => texto(value))) continue;
@@ -744,7 +682,7 @@ async function insertarBoletasPorLotes(filePath, importacion) {
     procesadas += 1;
 
     if (batch.length >= batchSize) {
-      await TasaBoleta.insertMany(batch, { ordered: true });
+      await guardarLote(batch);
       batch = [];
       await actualizarProgreso(
         importacion._id,
@@ -755,7 +693,7 @@ async function insertarBoletasPorLotes(filePath, importacion) {
       );
     }
   }
-  if (batch.length) await TasaBoleta.insertMany(batch, { ordered: true });
+  if (batch.length) await guardarLote(batch);
   return procesadas;
 }
 
@@ -773,7 +711,7 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
     await actualizarProgreso(importacion._id, "activando", insertadas, insertadas, "Activando períodos y reemplazando versiones anteriores.");
     await session.withTransaction(async () => {
       await TasaBoleta.updateMany(
-        { tipoTasa: importacion.tipoTasa, periodo: { $in: importacion.periodos }, activa: true, importacionId: { $ne: importacion._id } },
+        { tipoTasa: importacion.tipoTasa, ...filtroPeriodos(importacion.periodos), activa: true, importacionId: { $ne: importacion._id } },
         { $set: { activa: false } },
         { session }
       );
@@ -818,6 +756,9 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
     }
   } catch (error) {
     await TasaBoleta.deleteMany({ importacionId: importacion._id, activa: false }).catch(() => {});
+    await TasaObjeto.deleteMany({ importacionId: importacion._id }).catch(() => {});
+    const mensajesUsados = await TasaObjeto.distinct("mensajeBoletaId").catch(() => []);
+    await TasaMensaje.deleteMany({ _id: { $nin: mensajesUsados } }).catch(() => {});
     await TasaImportacion.updateOne(
       { _id: importacion._id, estado: "publicando" },
       {
@@ -852,11 +793,7 @@ async function iniciarPublicacion({ importacionId, filePath, fileHash, confirmar
   if (periodosFuturos.length && !confirmarPeriodosFuturos) {
     throw Object.assign(new Error(`La carga contiene períodos posteriores al año actual (${anioActual}). Confirmá expresamente para continuar.`), { status: 409, periodosFuturos });
   }
-  const conflictos = await TasaBoleta.distinct("periodo", {
-    tipoTasa: importacion.tipoTasa,
-    periodo: { $in: importacion.periodos },
-    activa: true,
-  });
+  const conflictos = await periodosActivosExistentes(importacion.tipoTasa, importacion.periodos);
   if (conflictos.length && !confirmarReemplazo) {
     throw Object.assign(new Error("Existen períodos publicados que serán reemplazados."), { status: 409, conflictos });
   }
@@ -888,10 +825,9 @@ async function listarPeriodosCargados(tipoTasa = "AUTOMOTORES") {
     { $match: { tipoTasa } },
     {
       $group: {
-        _id: { importacionId: "$importacionId", periodo: "$periodo", anio: "$anio", cuota: "$cuota" },
+        _id: { importacionId: "$importacionId", anio: "$anio", cuota: "$cuota" },
         cantidadEntradas: { $sum: 1 },
         cantidadActivas: { $sum: { $cond: ["$activa", 1, 0] } },
-        actualizadoAt: { $max: "$updatedAt" },
       },
     },
     {
@@ -907,12 +843,19 @@ async function listarPeriodosCargados(tipoTasa = "AUTOMOTORES") {
       $project: {
         _id: 0,
         importacionId: "$_id.importacionId",
-        periodo: "$_id.periodo",
+        periodo: {
+          $concat: [
+            { $cond: [{ $lt: ["$_id.cuota", 10] }, "0", ""] },
+            { $toString: "$_id.cuota" },
+            "/",
+            { $toString: "$_id.anio" },
+          ],
+        },
         anio: "$_id.anio",
         cuota: "$_id.cuota",
         cantidadEntradas: 1,
         habilitado: { $eq: ["$cantidadActivas", "$cantidadEntradas"] },
-        actualizadoAt: 1,
+        actualizadoAt: "$importacion.updatedAt",
         nombreArchivo: "$importacion.nombreArchivo",
         estadoImportacion: "$importacion.estado",
         publicadoAt: "$importacion.publicadoAt",
@@ -932,7 +875,8 @@ async function cambiarEstadoPeriodo({ importacionId, periodo, habilitar, confirm
     throw Object.assign(new Error("La carga está deshabilitada y sus períodos no pueden volver a habilitarse."), { status: 409 });
   }
 
-  const objetivo = await TasaBoleta.countDocuments({ importacionId, periodo });
+  const partes = periodoPartes(periodo);
+  const objetivo = await TasaBoleta.countDocuments({ importacionId, ...partes });
   if (!objetivo) {
     throw Object.assign(new Error("No hay boletas almacenadas para ese período."), { status: 404 });
   }
@@ -960,12 +904,12 @@ async function cambiarEstadoPeriodo({ importacionId, periodo, habilitar, confirm
     await session.withTransaction(async () => {
       if (habilitar) {
         await TasaBoleta.updateMany(
-          { tipoTasa: importacion.tipoTasa, periodo, activa: true, importacionId: { $ne: importacion._id } },
+          { tipoTasa: importacion.tipoTasa, ...partes, activa: true, importacionId: { $ne: importacion._id } },
           { $set: { activa: false } },
           { session }
         );
         await TasaBoleta.updateMany(
-          { importacionId: importacion._id, periodo },
+          { importacionId: importacion._id, ...partes },
           { $set: { activa: true } },
           { session }
         );
@@ -986,7 +930,7 @@ async function cambiarEstadoPeriodo({ importacionId, periodo, habilitar, confirm
           : "reemplazada_parcialmente";
       } else {
         await TasaBoleta.updateMany(
-          { importacionId: importacion._id, periodo },
+          { importacionId: importacion._id, ...partes },
           { $set: { activa: false } },
           { session }
         );

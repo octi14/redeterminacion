@@ -28,6 +28,7 @@ const VehiculoRoute = require('../routes/vehiculo.route');
 const TasaImportacionRoute = require('../routes/tasaImportacion.route');
 const TasaAutomotorRoute = require('../routes/tasaAutomotor.route');
 const TasaUrbanaRoute = require('../routes/tasaUrbana.route');
+const TasaCatalogoRoute = require('../routes/tasaCatalogo.route');
 
 
 
@@ -83,6 +84,7 @@ app.use("/proveedores", proveedorRoute);
 app.use("/pagosDobles", PagoDobleRoute);
 app.use("/vehiculos", VehiculoRoute);
 app.use("/tasas/importaciones", TasaImportacionRoute);
+app.use("/tasas/tipos", TasaCatalogoRoute);
 app.use("/tasas/automotores", TasaAutomotorRoute);
 app.use("/tasas/urbanas", TasaUrbanaRoute);
 app.use("/user-activities", userActivityRoute);
