@@ -38,6 +38,7 @@ exports.publicar = async function (req, res) {
       importacionId: req.params.id,
       buffer: requireBuffer(req),
       confirmarReemplazo: req.headers["x-confirmar-reemplazo"] === "true",
+      confirmarPeriodosFuturos: req.headers["x-confirmar-periodos-futuros"] === "true",
       guardarOriginal: req.headers["x-guardar-original"] === "true",
       user: req.authenticatedUser,
     });
@@ -46,6 +47,7 @@ exports.publicar = async function (req, res) {
     return res.status(error.status || 500).json({
       message: error.message,
       conflictos: error.conflictos || [],
+      periodosFuturos: error.periodosFuturos || [],
       resultado: error.result,
     });
   }
@@ -101,6 +103,17 @@ exports.reporte = async function (req, res) {
   }
 };
 
+exports.archivoOriginal = async function (req, res) {
+  try {
+    const original = await TasaImportacionService.obtenerArchivoOriginal(req.params.id);
+    res.setHeader("Content-Type", original.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(original.nombreArchivo)}`);
+    return res.send(original.body);
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.message });
+  }
+};
+
 exports.obtenerConfiguracion = async function (_req, res) {
   try {
     const enabled = await TasaImportacionService.guardarOriginalHabilitado();
@@ -144,5 +157,14 @@ exports.cambiarEstadoPeriodo = async function (req, res) {
       message: error.message,
       conflictos: error.conflictos || [],
     });
+  }
+};
+
+exports.deshabilitar = async function (req, res) {
+  try {
+    const result = await TasaImportacionService.deshabilitarImportacion(req.params.id);
+    return res.status(200).json({ data: result });
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.message });
   }
 };
