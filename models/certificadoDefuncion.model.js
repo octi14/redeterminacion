@@ -27,8 +27,20 @@ const obitoSchema = new Schema({
 
 const certificadoDefuncionSchema = new Schema({
   funeraria: funerariaSchema,
+  funerariaId: { type: Schema.Types.ObjectId, ref: 'Funeraria', index: true },
+  periodoId: { type: Schema.Types.ObjectId, ref: 'PeriodoCementerio', index: true },
   obito: obitoSchema,
   documentos: documentoSchema,
+  tipoSepultura: { type: String, enum: ['economico', 'intermedio', 'premium'], required: true },
+  precioAplicado: { type: Number, required: true },
+  condicionPago: { type: String, enum: ['PAGO', 'EXENTO'], default: 'PAGO' },
+  estadoRevisionPago: { type: String, enum: ['PENDIENTE', 'APROBADO', 'RECHAZADO'], default: 'PENDIENTE' },
+  observacionRevisionPago: String,
+  revisadoPorUsuarioId: { type: Schema.Types.ObjectId, ref: 'users' },
+  fechaRevisionPago: Date,
+  creadoPorUsuarioId: { type: Schema.Types.ObjectId, ref: 'users' },
+  modificadoPorUsuarioId: { type: Schema.Types.ObjectId, ref: 'users' },
+  creadoPorSeed: { type: Boolean, default: false },
   estado: { type: String, default: 'En revisión' },
 }, {
   timestamps: true,

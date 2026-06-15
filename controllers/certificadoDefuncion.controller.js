@@ -1,20 +1,17 @@
 const CertificadoDefuncion = require('../models/certificadoDefuncion.model');
 const Service = require('../services/certificadoDefuncion.service');
-const multer = require('multer');
-const AWS = require('aws-sdk');
+const PeriodoCementerio = require('../models/periodoCementerio.model');
+const PeriodoService = require('../services/periodoCementerio.service');
+const AuthService = require('../services/cementerioAuth.service');
+const StorageService = require('../services/cementerioStorage.service');
 
-// Configurar AWS S3
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  region: process.env.AWS_REGION,
-});
 
-const s3storage = multer.memoryStorage();
-
-exports.getAll = async function (_req, res) {
+exports.getAll = async function (req, res) {
   try {
-    const items = await Service.findAll();
+    const user = await AuthService.getUser(req);
+    AuthService.requireRole(user, ['cementerio', 'recaudaciones', 'master']);
+    const filter = user.admin === 'cementerio' ? { funerariaId: user.funerariaId } : {};
+    const items = await Service.findAll(filter);
     return res.status(200).json({ data: items });
   } catch (e) {
     return res.status(400).json({ message: e.message });
@@ -24,60 +21,60 @@ exports.getAll = async function (_req, res) {
 // Crea un certificado, sube documentos a S3 y guarda URLs
 exports.add = async function (req, res) {
   try {
-    const upload = multer({
-      s3storage,
-      limits: { fileSize: 48 * 1024 * 1024 },
-    });
+    const user = await AuthService.getUser(req);
+    AuthService.requireRole(user, ['cementerio', 'master']);
+    const documentos = req.body && req.body.certificado && req.body.certificado.documentos || {};
+    const formData = req.body && req.body.certificado || {};
+    const funerariaId = AuthService.resolveFunerariaId(user, formData.funerariaId);
+    const periodo = await PeriodoService.getOrCreateOpenPeriod(funerariaId);
+    if (periodo.estado !== 'ABIERTO') return res.status(409).json({ message: 'No hay un período abierto para la funeraria.' });
 
-    upload.array('archivo', 10)(req, res, async function (err) {
-      if (err instanceof multer.MulterError) {
-        if (!res.headersSent) return res.status(400).json({ message: 'Error al cargar el archivo.' });
-      } else if (err) {
-        if (!res.headersSent) return res.status(500).json({ message: 'Error interno del servidor.' });
-      }
+    formData.funerariaId = funerariaId;
+    formData.periodoId = periodo._id;
+    formData.creadoPorUsuarioId = user._id;
+    formData.modificadoPorUsuarioId = user._id;
+    formData.estadoRevisionPago = 'PENDIENTE';
+    formData.documentos = { documentos: [] };
 
-      const documentos = (req.body && req.body.certificado && req.body.certificado.documentos) || {};
-      const formData = (req.body && req.body.certificado) || {};
-      formData.documentos = { documentos: [] };
+    for (const nombreDocumento of Object.keys(documentos)) {
+      const documento = documentos[nombreDocumento];
+      if (!documento || !documento.contenido) continue;
+      const url = await StorageService.uploadBase64({
+        folder: `cementerio/fallecidos/${periodo._id}`,
+        nombre: documento.nombreDocumento || nombreDocumento,
+        contentType: documento.contenido.contentType,
+        data: documento.contenido.data,
+      });
+      formData.documentos.documentos.push({ nombreDocumento, url });
+    }
 
-      const uploadOne = async (nombreDocumento, documento) => {
-        if (documento && documento.contenido) {
-          const contentType = documento.contenido.contentType || 'application/octet-stream';
-          const extension = (contentType.split('/')[1] || 'bin');
-          const nombreArchivo = `${nombreDocumento}_${Date.now()}.${extension}`;
-          const buffer = Buffer.from(documento.contenido.data, 'base64');
-          const params = {
-            Bucket: process.env.AWS_BUCKET || 'haciendagesell',
-            Key: `cementerio/${nombreArchivo}`,
-            Body: buffer,
-            ContentType: contentType,
-          };
-          const data = await s3.upload(params).promise();
-          formData.documentos.documentos.push({ nombreDocumento, url: data.Location });
-        }
-      };
-
-      const promises = [];
-      for (const nombreDocumento in documentos) {
-        if (Object.prototype.hasOwnProperty.call(documentos, nombreDocumento)) {
-          const documento = documentos[nombreDocumento];
-          promises.push(uploadOne(documento.nombreDocumento, documento));
-        }
-      }
-      await Promise.all(promises);
-
-      const created = await Service.create(formData);
-      if (!res.headersSent) return res.status(201).json({ message: 'éxito.', data: created._id });
-    });
+    const created = await Service.create(formData);
+    return res.status(201).json({ message: 'éxito.', data: created._id });
   } catch (e) {
-    if (!res.headersSent) return res.status(400).json({ message: e.message });
+    return res.status(e.status || 400).json({ message: e.message });
   }
 };
 
 exports.update = async (req, res) => {
   try {
+    const user = await AuthService.getUser(req);
+    AuthService.requireRole(user, ['cementerio', 'master']);
     const { id } = req.params;
     const payload = req.body && (req.body.certificado || req.body);
+    const current = await CertificadoDefuncion.findById(id);
+    if (!current) return res.status(404).json({ error: 'Documento no encontrado' });
+    if (user.admin === 'cementerio' && String(current.funerariaId) !== String(user.funerariaId)) {
+      return res.status(403).json({ message: 'No tiene acceso a este registro.' });
+    }
+    const periodo = await PeriodoCementerio.findById(current.periodoId);
+    if (!periodo || periodo.estado !== 'ABIERTO') {
+      return res.status(409).json({ message: 'El período está cerrado y no admite modificaciones.' });
+    }
+    delete payload.funerariaId;
+    delete payload.periodoId;
+    delete payload.estadoRevisionPago;
+    delete payload.documentos;
+    payload.modificadoPorUsuarioId = user._id;
     const updated = await Service.update(id, payload);
     if (!updated) return res.status(404).json({ error: 'Documento no encontrado' });
     return res.status(200).json(updated);
@@ -88,6 +85,8 @@ exports.update = async (req, res) => {
 
 exports.updateLazy = async (req, res) => {
   try {
+    const user = await AuthService.getUser(req);
+    AuthService.requireRole(user, ['master']);
     const { id } = req.params;
     const payload = req.body && (req.body.certificado || req.body);
     const updated = await Service.updateLazy(id, payload);
@@ -100,7 +99,16 @@ exports.updateLazy = async (req, res) => {
 
 exports.delete = async function (req, res) {
   try {
+    const user = await AuthService.getUser(req);
+    AuthService.requireRole(user, ['cementerio', 'master']);
     const { id } = req.params;
+    const item = await CertificadoDefuncion.findById(id);
+    if (!item) return res.status(404).json({ message: 'Registro no encontrado.' });
+    if (user.admin === 'cementerio' && String(item.funerariaId) !== String(user.funerariaId)) {
+      return res.status(403).json({ message: 'No tiene acceso a este registro.' });
+    }
+    const periodo = await PeriodoCementerio.findById(item.periodoId);
+    if (!periodo || periodo.estado !== 'ABIERTO') return res.status(409).json({ message: 'El período está cerrado.' });
     await CertificadoDefuncion.findByIdAndDelete(id);
     return res.status(200).json({ message: 'CertificadoDefuncion eliminado.' });
   } catch (e) {
@@ -110,8 +118,14 @@ exports.delete = async function (req, res) {
 
 exports.getById = async function (req, res) {
   try {
+    const user = await AuthService.getUser(req);
+    AuthService.requireRole(user, ['cementerio', 'recaudaciones', 'master']);
     const { id } = req.params;
     const item = await CertificadoDefuncion.findById(id).select('-documentos');
+    if (!item) return res.status(404).json({ message: 'Registro no encontrado.' });
+    if (user.admin === 'cementerio' && String(item.funerariaId) !== String(user.funerariaId)) {
+      return res.status(403).json({ message: 'No tiene acceso a este registro.' });
+    }
     return res.status(200).json({ data: item });
   } catch (e) {
     return res.status(400).json({ message: e.message });
@@ -120,9 +134,14 @@ exports.getById = async function (req, res) {
 
 exports.getDocumentosById = async (req, res) => {
   try {
+    const user = await AuthService.getUser(req);
+    AuthService.requireRole(user, ['cementerio', 'recaudaciones', 'master']);
     const { id } = req.params;
-    const item = await CertificadoDefuncion.findById(id).select('documentos');
+    const item = await CertificadoDefuncion.findById(id).select('documentos funerariaId');
     if (!item) return res.status(404).json({ message: 'no encontrada.' });
+    if (user.admin === 'cementerio' && String(item.funerariaId) !== String(user.funerariaId)) {
+      return res.status(403).json({ message: 'No tiene acceso a este registro.' });
+    }
     const documentosArray = (item.documentos && item.documentos.documentos) || [];
     const documentos = {};
     documentosArray.forEach(doc => {

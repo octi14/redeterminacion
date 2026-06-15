@@ -12,6 +12,11 @@ const userSchema = new Schema(
     admin: {
       type: String,
     },
+    funerariaId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Funeraria',
+      default: null,
+    },
   },
   {
     timestamps: true,

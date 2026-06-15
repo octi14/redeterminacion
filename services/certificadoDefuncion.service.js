@@ -1,8 +1,8 @@
 let CertificadoDefuncion = require("../models/certificadoDefuncion.model");
 
-exports.findAll = async function () {
+exports.findAll = async function (filter = {}) {
   try {
-    return await CertificadoDefuncion.find().select('-documentos');
+    return await CertificadoDefuncion.find(filter).select('-documentos');
   } catch (e) {
     throw Error("Error getting objects.");
   }

@@ -7,7 +7,6 @@ const Controller = require("../controllers/certificadoDefuncion.controller");
 router.get("/", Controller.getAll);
 router.post("/", Controller.add);
 router.put("/:id", Controller.update);
-router.put("/lazy/:id", Controller.updateLazy);
 router.delete("/:id", Controller.delete);
 router.get("/:id", Controller.getById);
 router.get("/documentos/:id", Controller.getDocumentosById);

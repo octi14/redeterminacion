@@ -4,7 +4,7 @@ const config = require("../config");
 let User = require("../models/user.model");
 
 exports.getAll = async function () {
-  return User.find()
+  return User.find().select('-password').populate('funerariaId')
 }
 
 exports.authenticate = async function ({ username, password }) {

@@ -27,6 +27,8 @@ const proveedorRoute = require('../routes/proveedor.route');
 const PagoDobleRoute = require("../routes/pagoDoble.route");
 const VehiculoRoute = require('../routes/vehiculo.route');
 const CertificadoDefuncionRoute = require('../routes/certificadoDefuncion.route');
+const PeriodoCementerioRoute = require('../routes/periodoCementerio.route');
+const FunerariaRoute = require('../routes/funeraria.route');
 
 
 
@@ -101,5 +103,7 @@ app.use("/pagosDobles", PagoDobleRoute);
 app.use("/vehiculos", VehiculoRoute);
 app.use("/user-activities", userActivityRoute);
 app.use('/cementerio/certificadosDefuncion', CertificadoDefuncionRoute);
+app.use('/cementerio/periodos', PeriodoCementerioRoute);
+app.use('/cementerio/funerarias', FunerariaRoute);
 
 module.exports = app;
