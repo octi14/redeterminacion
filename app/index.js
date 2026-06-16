@@ -1,8 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const jwt = require("../utils/jwt");
-const mongoose = require("mongoose"); // Importar Mongoose para conectar a la base de datos
-const { loadConfigs, getCachedConfig } = require("../services/configs.service"); // Importar funciones del servicio de configuraciones
+const { getCachedConfig } = require("../services/configs.service");
 
 
 const UserRoute = require("../routes/user.route");
@@ -29,6 +28,10 @@ const VehiculoRoute = require('../routes/vehiculo.route');
 const CertificadoDefuncionRoute = require('../routes/certificadoDefuncion.route');
 const PeriodoCementerioRoute = require('../routes/periodoCementerio.route');
 const FunerariaRoute = require('../routes/funeraria.route');
+const TasaImportacionRoute = require('../routes/tasaImportacion.route');
+const TasaAutomotorRoute = require('../routes/tasaAutomotor.route');
+const TasaUrbanaRoute = require('../routes/tasaUrbana.route');
+const TasaCatalogoRoute = require('../routes/tasaCatalogo.route');
 
 
 
@@ -42,24 +45,6 @@ app.use(express.urlencoded({ extended: true }));
 
 // Agregar el middleware para JWT
 app.use(jwt());
-
-// Conectar a la base de datos y cargar configuraciones globales
-(async () => {
-  try {
-    // Cargar configuraciones globales en memoria
-    await loadConfigs();
-    console.log('Configuraciones globales cargadas.');
-
-    // Usar una configuración global como ejemplo
-    const maintenanceMode = getCachedConfig('maintenanceMode');
-    if (maintenanceMode) {
-      console.log('El modo de mantenimiento está activado.');
-    }
-  } catch (err) {
-    console.error('Error al iniciar el servidor:', err.message);
-    process.exit(1);
-  }
-})();
 
 // Rutas base
 app.get("/", (_req, res) => {
@@ -101,6 +86,10 @@ app.use("/valesCombustible", valeCombustibleRoute);
 app.use("/proveedores", proveedorRoute);
 app.use("/pagosDobles", PagoDobleRoute);
 app.use("/vehiculos", VehiculoRoute);
+app.use("/tasas/importaciones", TasaImportacionRoute);
+app.use("/tasas/tipos", TasaCatalogoRoute);
+app.use("/tasas/automotores", TasaAutomotorRoute);
+app.use("/tasas/urbanas", TasaUrbanaRoute);
 app.use("/user-activities", userActivityRoute);
 app.use('/cementerio/certificadosDefuncion', CertificadoDefuncionRoute);
 app.use('/cementerio/periodos', PeriodoCementerioRoute);

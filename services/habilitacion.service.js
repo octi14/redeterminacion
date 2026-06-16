@@ -9,9 +9,9 @@ let Habilitacion = require("../models/habilitacion.model");
 //   return result;
 // };
 
-exports.findAll = async function () {
+exports.findAll = async function (filter = {}) {
   try {
-    return await Habilitacion.find().select('-documentos');
+    return await Habilitacion.find(filter).select('-documentos');
   } catch (e) {
     console.error(e);
     throw Error("Error getting objects.");

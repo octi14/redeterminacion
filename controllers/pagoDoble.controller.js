@@ -1,14 +1,10 @@
 const PagoDoble = require('../models/pagoDoble.model');
 const PagoDobleService = require('../services/pagoDoble.service');
 const TicketRecaudacionesController = require('../controllers/ticketRecaudaciones.controller');
-const multer = require('multer');
-const {GridFsStorage} = require('multer-gridfs-storage');
-const { GridFSBucket } = require('mongodb');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 
 const AWS = require('aws-sdk');
-
 
 // Configurar AWS S3
 const s3 = new AWS.S3({
@@ -17,9 +13,6 @@ const s3 = new AWS.S3({
   region: process.env.AWS_REGION,
 });
 
-const s3storage = multer.memoryStorage();  // Usamos almacenamiento en memoria con Multer
-
-// Configurar el storage para multer (opcional)
 exports.getAll = async function (req, res) {
   try {
     const pagoDobles = await PagoDobleService.findAll();
@@ -36,94 +29,71 @@ exports.getAll = async function (req, res) {
 //esta operación crea una instancia de pagoDoble y guarda sus documentos en un bucket de amazon s3.
 exports.add = async function (req, res) {
   try {
-    const upload = multer({
-      s3storage,
-      limits: {
-        fileSize: 48 * 1024 * 1024, // 48 MB
-      },
-    });
+    const nroTramite = await TicketRecaudacionesController.getCurrent();
+    const documentos = req.body.pagoDoble.documentos || {};
+    const formData = req.body.pagoDoble;
+    formData.documentos = { documentos: [] };
 
-    upload.array('archivo', 10)(req, res, async function (err) {
-      if (err instanceof multer.MulterError) {
-        if (!res.headersSent) {
-          return res.status(400).json({
-            message: 'Error al cargar el archivo.',
+    const promises = [];
+
+    const agregarDocumento = async (nombreDocumento, documento, nroTramite) => {
+      if (documento && documento.contenido) {
+        // Determinar la extensión basándonos en el ContentType
+        const contentType = documento.contenido.contentType; // Ejemplo: 'application/pdf'
+        const extension = contentType.split('/')[1]; // Ejemplo: 'pdf'
+
+        // Crear el nombre del archivo con la extensión
+        const nombreArchivo = `${nombreDocumento}_${nroTramite}.${extension}`;
+
+        // Convertir el archivo de base64 a buffer
+        const buffer = Buffer.from(documento.contenido.data, 'base64');
+
+        const params = {
+          Bucket: 'haciendagesell',
+          Key: `pagos-dobles/${nombreArchivo}`, // Usar el nombre con la extensión
+          Body: buffer,
+          ContentType: contentType,
+          // No es necesario usar ContentType aquí, ya que no lo estamos configurando explícitamente
+        };
+
+        try {
+          const data = await s3.upload(params).promise();
+          const fileUrl = data.Location; // URL pública del archivo subido
+
+          formData.documentos.documentos.push({
+            nombreDocumento: nombreDocumento,
+            url: fileUrl,
           });
-        }
-      } else if (err) {
-        if (!res.headersSent) {
-          return res.status(500).json({
-            message: 'Error interno del servidor.',
-          });
-        }
-      }
-
-      const nroTramite = await TicketRecaudacionesController.getCurrent();
-      const documentos = req.body.pagoDoble.documentos || {};
-      const formData = req.body.pagoDoble;
-      formData.documentos = { documentos: [] };
-
-      const promises = [];
-
-      const agregarDocumento = async (nombreDocumento, documento, nroTramite) => {
-        if (documento && documento.contenido) {
-          // Determinar la extensión basándonos en el ContentType
-          const contentType = documento.contenido.contentType; // Ejemplo: 'application/pdf'
-          const extension = contentType.split('/')[1]; // Ejemplo: 'pdf'
-
-          // Crear el nombre del archivo con la extensión
-          const nombreArchivo = `${nombreDocumento}_${nroTramite}.${extension}`;
-
-          // Convertir el archivo de base64 a buffer
-          const buffer = Buffer.from(documento.contenido.data, 'base64');
-
-          const params = {
-            Bucket: 'haciendagesell',
-            Key: `pagos-dobles/${nombreArchivo}`, // Usar el nombre con la extensión
-            Body: buffer,
-            ContentType: contentType,
-            // No es necesario usar ContentType aquí, ya que no lo estamos configurando explícitamente
-          };
-
-          try {
-            const data = await s3.upload(params).promise();
-            const fileUrl = data.Location; // URL pública del archivo subido
-
-            formData.documentos.documentos.push({
-              nombreDocumento: nombreDocumento,
-              url: fileUrl,
+        } catch (error) {
+          console.error('Error subiendo archivo a S3:', error.message);
+          if (!res.headersSent) {
+            return res.status(500).json({
+              message: 'Error subiendo el archivo a S3.',
             });
-          } catch (error) {
-            console.error('Error subiendo archivo a S3:', error.message);
-            if (!res.headersSent) {
-              return res.status(500).json({
-                message: 'Error subiendo el archivo a S3.',
-              });
-            }
           }
         }
-      };
-
-      // Procesar todos los documentos
-      for (const nombreDocumento in documentos) {
-        if (documentos.hasOwnProperty(nombreDocumento)) {
-          const documento = documentos[nombreDocumento];
-          promises.push(agregarDocumento(documento.nombreDocumento, documento, nroTramite));
-        }
       }
+    };
 
-      await Promise.all(promises);
-
-      formData.nroSolicitud = nroTramite;
-      const createdPagoDoble = await PagoDobleService.create(formData);
-
-      if (!res.headersSent) {
-        return res.status(201).json({
-          message: 'éxito.',
-          data: nroTramite,
-        });
+    // Procesar todos los documentos
+    for (const nombreDocumento in documentos) {
+      if (documentos.hasOwnProperty(nombreDocumento)) {
+        const documento = documentos[nombreDocumento];
+        promises.push(agregarDocumento(documento.nombreDocumento, documento, nroTramite));
       }
-    });
+    }
+
+    await Promise.all(promises);
+
+    formData.nroSolicitud = nroTramite;
+    const createdPagoDoble = await PagoDobleService.create(formData);
+
+    if (!res.headersSent) {
+      return res.status(201).json({
+        message: 'éxito.',
+        data: nroTramite,
+      });
+    }
   } catch (e) {
     if (!res.headersSent) {
       return res.status(400).json({
@@ -326,62 +296,3 @@ exports.getAprobados = async function (req, res) {
     });
   }
 };
-
-//to do: modificarlo para funcionar con s3
-// exports.deleteDocumentosById = async function (req, res) {
-//   try {
-//     const { id } = req.params; // Obtén el ID de la habilitación que deseas eliminar los documentos
-//     // Busca la habilitación por su ID
-//     var pagoDoble = null;
-//     try{
-//       pagoDoble = await pagoDoble.findById(new mongoose.Types.ObjectId(id)).select("documentos").exec();
-//     } catch(e) {
-//       return res.status(400).json({
-//         message: e.message,
-//       });
-//     }
-
-//     if (!pagoDoble) {
-//       return res.status(404).json({
-//         message: 'La habilitación no se encontró en la base de datos',
-//       });
-//     }
-
-//     const documentos = pagoDoble.documentos.documentos.toObject(); // Convierte a un objeto Mongoose
-
-//     // Accede al bucket de GridFS
-//     const bucket = new GridFSBucket(mongoose.connection.db, {
-//       bucketName: 'documentos',
-//     });
-
-//     // Itera a través de los campos de documentos y elimina cada documento asociado a la habilitación específica
-//     const promises = Object.keys(documentos).map(async (campo) => {
-//       let documentoId = documentos[campo].contenido;
-//       if (documentoId && campo !== "_id") {
-//         try {
-//           await bucket.delete(documentoId);
-//           documentos[campo] = null; // Marca el documento como eliminado
-//         } catch (e) {
-//           console.log(`Error tratando de borrar el documento ${documentoId}`);
-//         }
-//       }
-//     });
-
-//     // Espera a que todas las eliminaciones se completen antes de responder
-//     await Promise.all(promises);
-
-//     // Actualiza la referencia de documentos en la instancia de habilitacion
-//     habilitacion.documentos.documentos = documentos;
-
-//     // Guarda la instancia actualizada en la base de datos
-//     await habilitacion.save();
-
-//     return res.status(200).json({
-//       message: 'Documentos eliminados con éxito.',
-//     });
-//   } catch (e) {
-//     return res.status(400).json({
-//       message: e.message,
-//     });
-//   }
-// };

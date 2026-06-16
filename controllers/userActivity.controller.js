@@ -29,9 +29,18 @@ exports.createUserActivity = async (req, res) => {
     }
 };
 
+// GET /user-activities — Soporta query params para no traer todo el historial de una vez:
+// - days: solo actividades de los últimos N días (ej. ?days=30). Por defecto el front pide 30.
+// - startDate, endDate: rango de fechas para el filtro manual (Aplicar Filtro en la UI).
+// - Sin params: devuelve todas las actividades (opción "Mostrar todas").
 exports.getAllUserActivities = async (req, res) => {
     try {
-        const activities = await userActivityService.getAllUserActivities();
+        const { days, startDate, endDate } = req.query;
+        const options = {};
+        if (days != null) options.days = parseInt(days, 10);
+        if (startDate) options.startDate = startDate;
+        if (endDate) options.endDate = endDate;
+        const activities = await userActivityService.getAllUserActivities(options);
         res.status(200).json({
             message: 'CONTROLLER: Actividades de usuario obtenidas correctamente.',
             data: activities
