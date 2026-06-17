@@ -9,8 +9,8 @@ const StorageService = require('../services/cementerioStorage.service');
 exports.getAll = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['cementerio', 'recaudaciones', 'master']);
-    const filter = user.admin === 'cementerio' ? { funerariaId: user.funerariaId } : {};
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review']);
+    const filter = AuthService.canAccessAllCemetery(user) ? {} : { funerariaId: user.funerariaId };
     const items = await Service.findAll(filter);
     return res.status(200).json({ data: items });
   } catch (e) {
@@ -22,7 +22,7 @@ exports.getAll = async function (req, res) {
 exports.add = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['cementerio', 'master']);
+    AuthService.requirePermission(user, 'cementerio.update');
     const documentos = req.body && req.body.certificado && req.body.certificado.documentos || {};
     const formData = req.body && req.body.certificado || {};
     const funerariaId = AuthService.resolveFunerariaId(user, formData.funerariaId);
@@ -58,14 +58,12 @@ exports.add = async function (req, res) {
 exports.update = async (req, res) => {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['cementerio', 'master']);
+    AuthService.requirePermission(user, 'cementerio.update');
     const { id } = req.params;
     const payload = req.body && (req.body.certificado || req.body);
     const current = await CertificadoDefuncion.findById(id);
     if (!current) return res.status(404).json({ error: 'Documento no encontrado' });
-    if (user.admin === 'cementerio' && String(current.funerariaId) !== String(user.funerariaId)) {
-      return res.status(403).json({ message: 'No tiene acceso a este registro.' });
-    }
+    AuthService.ensureFunerariaAccess(user, current.funerariaId);
     const periodo = await PeriodoCementerio.findById(current.periodoId);
     if (!periodo || periodo.estado !== 'ABIERTO') {
       return res.status(409).json({ message: 'El período está cerrado y no admite modificaciones.' });
@@ -86,7 +84,7 @@ exports.update = async (req, res) => {
 exports.updateLazy = async (req, res) => {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['master']);
+    AuthService.requirePermission(user, '*');
     const { id } = req.params;
     const payload = req.body && (req.body.certificado || req.body);
     const updated = await Service.updateLazy(id, payload);
@@ -100,13 +98,11 @@ exports.updateLazy = async (req, res) => {
 exports.delete = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['cementerio', 'master']);
+    AuthService.requirePermission(user, 'cementerio.update');
     const { id } = req.params;
     const item = await CertificadoDefuncion.findById(id);
     if (!item) return res.status(404).json({ message: 'Registro no encontrado.' });
-    if (user.admin === 'cementerio' && String(item.funerariaId) !== String(user.funerariaId)) {
-      return res.status(403).json({ message: 'No tiene acceso a este registro.' });
-    }
+    AuthService.ensureFunerariaAccess(user, item.funerariaId);
     const periodo = await PeriodoCementerio.findById(item.periodoId);
     if (!periodo || periodo.estado !== 'ABIERTO') return res.status(409).json({ message: 'El período está cerrado.' });
     await CertificadoDefuncion.findByIdAndDelete(id);
@@ -119,13 +115,11 @@ exports.delete = async function (req, res) {
 exports.getById = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['cementerio', 'recaudaciones', 'master']);
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review']);
     const { id } = req.params;
     const item = await CertificadoDefuncion.findById(id).select('-documentos');
     if (!item) return res.status(404).json({ message: 'Registro no encontrado.' });
-    if (user.admin === 'cementerio' && String(item.funerariaId) !== String(user.funerariaId)) {
-      return res.status(403).json({ message: 'No tiene acceso a este registro.' });
-    }
+    AuthService.ensureFunerariaAccess(user, item.funerariaId);
     return res.status(200).json({ data: item });
   } catch (e) {
     return res.status(400).json({ message: e.message });
@@ -135,17 +129,15 @@ exports.getById = async function (req, res) {
 exports.getDocumentosById = async (req, res) => {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['cementerio', 'recaudaciones', 'master']);
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review']);
     const { id } = req.params;
     const item = await CertificadoDefuncion.findById(id).select('documentos funerariaId');
     if (!item) return res.status(404).json({ message: 'no encontrada.' });
-    if (user.admin === 'cementerio' && String(item.funerariaId) !== String(user.funerariaId)) {
-      return res.status(403).json({ message: 'No tiene acceso a este registro.' });
-    }
+    AuthService.ensureFunerariaAccess(user, item.funerariaId);
     const documentosArray = (item.documentos && item.documentos.documentos) || [];
     const documentos = {};
     documentosArray.forEach(doc => {
-      documentos[doc.nombreDocumento] = { url: doc.url };
+      documentos[doc.nombreDocumento] = { url: StorageService.getSignedUrl(doc.url) };
     });
     return res.status(200).json({ data: documentos });
   } catch (e) {

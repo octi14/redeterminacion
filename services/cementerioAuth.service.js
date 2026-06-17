@@ -1,9 +1,10 @@
 const User = require('../models/user.model');
+const RbacService = require('./experimentalRbac.service');
 
 exports.getUser = async function (req) {
   const userId = req.user && req.user.sub;
   if (!userId) {
-    const error = new Error('Autenticación requerida.');
+    const error = new Error('Autenticacion requerida.');
     error.status = 401;
     throw error;
   }
@@ -14,21 +15,39 @@ exports.getUser = async function (req) {
     error.status = 401;
     throw error;
   }
+
+  user.access = await RbacService.resolveForUser(user);
   return user;
 };
 
-exports.requireRole = function (user, roles) {
-  if (!roles.includes(user.admin)) {
-    const error = new Error('No tiene permisos para realizar esta acción.');
+exports.hasPermission = function (user, permission) {
+  return RbacService.can((user.access && user.access.permissions) || [], permission);
+};
+
+exports.requirePermission = function (user, permission) {
+  if (!exports.hasPermission(user, permission)) {
+    const error = new Error('No tiene permisos para realizar esta accion.');
     error.status = 403;
     throw error;
   }
 };
 
+exports.requireAnyPermission = function (user, permissions) {
+  if (!permissions.some((permission) => exports.hasPermission(user, permission))) {
+    const error = new Error('No tiene permisos para realizar esta accion.');
+    error.status = 403;
+    throw error;
+  }
+};
+
+exports.canAccessAllCemetery = function (user) {
+  return exports.hasPermission(user, '*') || exports.hasPermission(user, 'cementerio.review');
+};
+
 exports.resolveFunerariaId = function (user, requestedFunerariaId) {
-  if (user.admin === 'master') {
+  if (exports.canAccessAllCemetery(user)) {
     if (!requestedFunerariaId) {
-      const error = new Error('Master debe seleccionar una funeraria.');
+      const error = new Error('Debe seleccionar una funeraria.');
       error.status = 400;
       throw error;
     }
@@ -41,4 +60,13 @@ exports.resolveFunerariaId = function (user, requestedFunerariaId) {
     throw error;
   }
   return user.funerariaId;
+};
+
+exports.ensureFunerariaAccess = function (user, funerariaId) {
+  if (exports.canAccessAllCemetery(user)) return;
+  if (String(funerariaId) !== String(user.funerariaId)) {
+    const error = new Error('No tiene acceso a este registro.');
+    error.status = 403;
+    throw error;
+  }
 };

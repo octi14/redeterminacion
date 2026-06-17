@@ -10,8 +10,8 @@ const sendError = (res, error) => res.status(error.status || 400).json({ message
 exports.getAll = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['recaudaciones', 'master']);
-    if (user.admin === 'master') {
+    AuthService.requirePermission(user, 'cementerio.review');
+    if (AuthService.canAccessAllCemetery(user)) {
       const funerarias = await Funeraria.find({ activa: true }).select('_id');
       await Promise.all(funerarias.map(item => PeriodoService.getOrCreateOpenPeriod(item._id)));
     }
@@ -24,8 +24,8 @@ exports.getAll = async function (req, res) {
 exports.getMine = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['cementerio', 'master']);
-    const funerariaId = user.admin === 'master' ? req.query.funerariaId : user.funerariaId;
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.update']);
+    const funerariaId = AuthService.canAccessAllCemetery(user) ? req.query.funerariaId : user.funerariaId;
     if (!funerariaId) throw Object.assign(new Error('Debe seleccionar o tener asociada una funeraria.'), { status: 400 });
     await PeriodoService.getOrCreateOpenPeriod(funerariaId);
     return res.status(200).json({ data: await PeriodoService.getPeriods({ funerariaId }) });
@@ -37,12 +37,10 @@ exports.getMine = async function (req, res) {
 exports.getById = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['cementerio', 'recaudaciones', 'master']);
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review']);
     const periodo = await PeriodoService.getPeriodWithDetails(req.params.id);
     if (!periodo) return res.status(404).json({ message: 'Período no encontrado.' });
-    if (user.admin === 'cementerio' && String(periodo.funerariaId) !== String(user.funerariaId)) {
-      return res.status(403).json({ message: 'No tiene acceso a este período.' });
-    }
+    AuthService.ensureFunerariaAccess(user, periodo.funerariaId);
     return res.status(200).json({ data: periodo });
   } catch (error) {
     return sendError(res, error);
@@ -52,12 +50,10 @@ exports.getById = async function (req, res) {
 exports.confirm = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['cementerio', 'master']);
+    AuthService.requirePermission(user, 'cementerio.update');
     const periodo = await PeriodoCementerio.findById(req.params.id);
     if (!periodo) return res.status(404).json({ message: 'Período no encontrado.' });
-    if (user.admin === 'cementerio' && String(periodo.funerariaId) !== String(user.funerariaId)) {
-      return res.status(403).json({ message: 'No tiene acceso a este período.' });
-    }
+    AuthService.ensureFunerariaAccess(user, periodo.funerariaId);
     if (periodo.estado !== 'PENDIENTE_CONFIRMACION') {
       return res.status(409).json({ message: 'El período no está listo para confirmar.' });
     }
@@ -89,7 +85,7 @@ exports.confirm = async function (req, res) {
 exports.reviewIndividual = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['recaudaciones', 'master']);
+    AuthService.requirePermission(user, 'cementerio.review');
     const periodo = await PeriodoCementerio.findById(req.params.periodoId);
     if (!periodo || periodo.estado !== 'EN_PROCESO') return res.status(409).json({ message: 'El período no está en proceso.' });
     const estado = req.body.estado;
@@ -110,7 +106,7 @@ exports.reviewIndividual = async function (req, res) {
 exports.reviewMonthly = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['recaudaciones', 'master']);
+    AuthService.requirePermission(user, 'cementerio.review');
     const estado = req.body.estado;
     if (!['APROBADO', 'RECHAZADO'].includes(estado)) return res.status(400).json({ message: 'Estado de revisión inválido.' });
     const periodo = await PeriodoCementerio.findOneAndUpdate(
@@ -128,7 +124,7 @@ exports.reviewMonthly = async function (req, res) {
 exports.resolve = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireRole(user, ['recaudaciones', 'master']);
+    AuthService.requirePermission(user, 'cementerio.review');
     const periodo = await PeriodoCementerio.findById(req.params.id);
     if (!periodo || periodo.estado !== 'EN_PROCESO') return res.status(409).json({ message: 'El período no está en proceso.' });
     const estado = req.body.estado;

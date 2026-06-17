@@ -1,5 +1,6 @@
 const PeriodoCementerio = require('../models/periodoCementerio.model');
 const CertificadoDefuncion = require('../models/certificadoDefuncion.model');
+const StorageService = require('./cementerioStorage.service');
 
 const monthBounds = (date = new Date()) => {
   const anio = date.getFullYear();
@@ -39,7 +40,7 @@ exports.getOrCreateOpenPeriod = async function (funerariaId, date = new Date()) 
 exports.getPeriodWithDetails = async function (id) {
   const periodo = await PeriodoCementerio.findById(id).populate('funerariaId').lean();
   if (!periodo) return null;
-  const fallecidos = await CertificadoDefuncion.find({ periodoId: periodo._id }).lean();
+  const fallecidos = await CertificadoDefuncion.find({ periodoId: periodo._id }).sort({ createdAt: -1, _id: -1 }).lean();
   return exports.formatPeriod(periodo, fallecidos);
 };
 
@@ -47,7 +48,7 @@ exports.getPeriods = async function (filter = {}) {
   await exports.closeExpiredPeriods();
   const periodos = await PeriodoCementerio.find(filter).populate('funerariaId').sort({ anio: -1, mes: -1 }).lean();
   const ids = periodos.map(item => item._id);
-  const fallecidos = await CertificadoDefuncion.find({ periodoId: { $in: ids } }).lean();
+  const fallecidos = await CertificadoDefuncion.find({ periodoId: { $in: ids } }).sort({ createdAt: -1, _id: -1 }).lean();
   const grouped = fallecidos.reduce((acc, item) => {
     const key = String(item.periodoId);
     if (!acc[key]) acc[key] = [];
@@ -79,12 +80,16 @@ exports.formatPeriod = function (periodo, fallecidos) {
     const documentos = {};
     const documentosArray = item.documentos && item.documentos.documentos || [];
     documentosArray.forEach(documento => {
-      documentos[documento.nombreDocumento] = { url: documento.url };
+      documentos[documento.nombreDocumento] = { url: StorageService.getSignedUrl(documento.url) };
     });
     return { ...item, id: item._id, documentos };
   });
+  const comprobantePagoMensual = periodo.comprobantePagoMensual && periodo.comprobantePagoMensual.url
+    ? { ...periodo.comprobantePagoMensual, url: StorageService.getSignedUrl(periodo.comprobantePagoMensual.url) }
+    : periodo.comprobantePagoMensual;
   return {
     ...periodo,
+    comprobantePagoMensual,
     id: periodo._id,
     funeraria: periodo.funerariaId,
     funerariaId: periodo.funerariaId && periodo.funerariaId._id || periodo.funerariaId,

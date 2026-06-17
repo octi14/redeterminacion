@@ -15,6 +15,20 @@ exports.findAll = async function (req, res) {
   }
 }
 
+exports.me = async function (req, res) {
+  try {
+    const user = await UserService.getMe(req);
+    return res.status(200).json({
+      message: "Current user",
+      data: user,
+    });
+  } catch (e) {
+    return res.status(e.status || 400).json({
+      message: e.message,
+    });
+  }
+};
+
 exports.authenticate = async function (req, res) {
   try {
     // TODO: validate req.body

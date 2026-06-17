@@ -1,6 +1,7 @@
 const Habilitacion = require('../models/habilitacion.model');
 const HabilitacionService = require('../services/habilitacion.service');
 const TicketController = require('../controllers/ticket.controller');
+const RbacService = require('../services/experimentalRbac.service');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -12,6 +13,16 @@ const s3 = new AWS.S3({
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   region: process.env.AWS_REGION,
 });
+
+async function requireHabilitacionUpdatePermission(req, permission) {
+  const context = await RbacService.getCurrentUserContext(req);
+  if (!RbacService.can(context.access.permissions, permission)) {
+    const error = new Error('No tiene permisos para realizar esta acción.');
+    error.status = 403;
+    error.permission = permission;
+    throw error;
+  }
+}
 
 exports.getAll = async function (req, res) {
   try {
@@ -425,5 +436,53 @@ exports.deleteDocumentosById = async function (req, res) {
     return res.status(200).json({ message: 'Documentos eliminados con éxito.' });
   } catch (e) {
     return res.status(400).json({ message: e.message });
+  }
+};
+
+exports.update = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const camposActualizados = req.body || {};
+    const habilitacion = camposActualizados.habilitacion || {};
+    const permission = Object.prototype.hasOwnProperty.call(habilitacion, 'status')
+      ? 'habilitaciones.status'
+      : 'habilitaciones.update';
+    await requireHabilitacionUpdatePermission(req, permission);
+
+    const documentoActualizado = await HabilitacionService.update(id, habilitacion);
+
+    if (!documentoActualizado) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
+    }
+    return res.status(200).json(documentoActualizado);
+  } catch (error) {
+    return res.status(error.status || 400).json({
+      message: error.message,
+      permission: error.permission,
+    });
+  }
+};
+
+exports.updateLazy = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const camposActualizados = req.body || {};
+    const habilitacion = camposActualizados.habilitacion || {};
+    const permission = Object.prototype.hasOwnProperty.call(habilitacion, 'status')
+      ? 'habilitaciones.status'
+      : 'habilitaciones.update';
+    await requireHabilitacionUpdatePermission(req, permission);
+
+    const documentoActualizado = await HabilitacionService.updateLazy(id, habilitacion);
+
+    if (!documentoActualizado) {
+      return res.status(404).json({ error: 'Documento no encontrado' });
+    }
+    return res.status(200).json(documentoActualizado);
+  } catch (error) {
+    return res.status(error.status || 400).json({
+      message: error.message,
+      permission: error.permission,
+    });
   }
 };

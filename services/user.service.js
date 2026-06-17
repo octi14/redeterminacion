@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const config = require("../config");
+const ExperimentalRbacService = require("./experimentalRbac.service");
 let User = require("../models/user.model");
 
 exports.getAll = async function () {
@@ -22,8 +23,13 @@ exports.authenticate = async function ({ username, password }) {
     const responseUser = user.toJSON();
     delete responseUser.password;
 
+    const access = await ExperimentalRbacService.resolveForUser(user);
+
     return {
       ...responseUser,
+      rolesExp: access.roles,
+      permissions: access.permissions,
+      accessSource: access.source,
       token,
     };
   } else {
@@ -56,6 +62,19 @@ exports.create = async function ({ username, password, admin }) {
 
 exports.getById = async function (id) {
   return User.findById(id, { password: false });
+};
+
+exports.getMe = async function (req) {
+  const { user, access } = await ExperimentalRbacService.getCurrentUserContext(req);
+  const responseUser = user.toJSON();
+  delete responseUser.password;
+
+  return {
+    ...responseUser,
+    rolesExp: access.roles,
+    permissions: access.permissions,
+    accessSource: access.source,
+  };
 };
 
 exports.changePassword = async function(userId, oldPassword, newPassword) {

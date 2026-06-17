@@ -1,11 +1,11 @@
 const express = require("express");
 const Controller = require("../controllers/tasaImportacion.controller");
-const requireMaster = require("../middleware/master.middleware");
+const RbacService = require("../services/experimentalRbac.service");
 const xlsxTemporal = require("../middleware/xlsxTemporal.middleware");
 
 const router = express.Router();
 
-router.use(requireMaster);
+router.use(RbacService.requirePermission("boletas.manage"));
 router.get("/tipos", Controller.listarTipos);
 router.get("/", Controller.listar);
 router.get("/periodos", Controller.listarPeriodos);

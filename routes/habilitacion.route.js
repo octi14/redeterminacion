@@ -3,16 +3,17 @@ const router = express.Router();
 // const paginationMiddleware = require("express-pagination-middleware");
 
 const HabilitacionController = require("../controllers/habilitacion.controller");
+const RbacService = require("../services/experimentalRbac.service");
 
 // endpoints
-router.get("/", HabilitacionController.getAll);
+router.get("/", RbacService.requirePermission("habilitaciones.read"), HabilitacionController.getAll);
 router.post("/", HabilitacionController.add);
-router.put("/:id", HabilitacionController.update);
-router.put("/lazy/:id", HabilitacionController.updateLazy);
+router.put("/:id", RbacService.requirePermission("habilitaciones.update"), HabilitacionController.update);
+router.put("/lazy/:id", RbacService.requirePermission("habilitaciones.update"), HabilitacionController.updateLazy);
 // router.delete("/:id", ObraController.delete);
-router.get("/:id", HabilitacionController.getById);
-router.get("/documentos/:id", HabilitacionController.getDocumentosById);
-router.post("/documentos/delete/:id", HabilitacionController.deleteDocumentosById);
+router.get("/:id", RbacService.requirePermission("habilitaciones.read"), HabilitacionController.getById);
+router.get("/documentos/:id", RbacService.requirePermission("habilitaciones.read"), HabilitacionController.getDocumentosById);
+router.post("/documentos/delete/:id", RbacService.requirePermission("habilitaciones.update"), HabilitacionController.deleteDocumentosById);
 router.post("/nroTramite", HabilitacionController.getByNroTramite);
 // router.post("/search", ObraController.search);
 // router.post("/migrar/:id", HabilitacionController.migrarHabilitacion);

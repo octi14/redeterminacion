@@ -1,4 +1,15 @@
 let TurnoService = require("../services/turno.service");
+const RbacService = require("../services/experimentalRbac.service");
+
+async function requireTurnoUpdatePermission(req) {
+  const context = await RbacService.getCurrentUserContext(req);
+  if (!RbacService.can(context.access.permissions, "turnos.update")) {
+    const error = new Error("No tiene permisos para modificar turnos.");
+    error.status = 403;
+    error.permission = "turnos.update";
+    throw error;
+  }
+}
 
 exports.getAll = async function (req, res) {
   try {
@@ -104,6 +115,45 @@ exports.delete = async function (req, res) {
   } catch (e) {
     return res.status(400).json({
       message: "No se pudo eliminar",
+    });
+  }
+};
+
+exports.update = async function (req, res) {
+  try {
+    const { id } = req.params;
+    const camposActualizados = req.body.turno;
+
+    await requireTurnoUpdatePermission(req);
+
+    const updated = await TurnoService.update(id, camposActualizados);
+
+    return res.status(200).json({
+      message: "Turno modificado.",
+      data: updated,
+    });
+  } catch (e) {
+    return res.status(e.status || 400).json({
+      message: e.message,
+      permission: e.permission,
+    });
+  }
+};
+
+exports.delete = async function (req, res) {
+  try {
+    const { id } = req.params;
+    await requireTurnoUpdatePermission(req);
+
+    await TurnoService.delete(id);
+
+    return res.status(200).json({
+      message: "Turno eliminado",
+    });
+  } catch (e) {
+    return res.status(e.status || 400).json({
+      message: e.message || "No se pudo eliminar",
+      permission: e.permission,
     });
   }
 };

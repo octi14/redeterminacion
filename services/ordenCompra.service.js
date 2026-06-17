@@ -20,6 +20,14 @@ exports.getById = async function (id) {
   return await OrdenCompra.findById(id);
 };
 
+exports.update = async function (id, ordenCompraData) {
+  return OrdenCompra.findOneAndUpdate(
+    { _id: id },
+    { $set: ordenCompraData },
+    { new: true }
+  );
+};
+
 exports.delete = async function (id) {
   return OrdenCompra.deleteOne({ _id: id });
 };
