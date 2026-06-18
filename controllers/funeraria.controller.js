@@ -7,7 +7,7 @@ const sendError = (res, error) => res.status(error.status || 400).json({ message
 exports.getAll = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requirePermission(user, 'cementerio.review');
+    AuthService.requirePermission(user, 'cementerio.admin');
     return res.status(200).json({ data: await Funeraria.find().sort({ nombre: 1 }) });
   } catch (error) {
     return sendError(res, error);
@@ -17,7 +17,7 @@ exports.getAll = async function (req, res) {
 exports.create = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requirePermission(user, 'cementerio.review');
+    AuthService.requirePermission(user, 'cementerio.admin');
     const funeraria = await Funeraria.create(req.body.funeraria || req.body);
     return res.status(201).json({ data: funeraria });
   } catch (error) {
@@ -28,7 +28,7 @@ exports.create = async function (req, res) {
 exports.update = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requirePermission(user, 'cementerio.review');
+    AuthService.requirePermission(user, 'cementerio.admin');
     const funeraria = await Funeraria.findByIdAndUpdate(req.params.id, req.body.funeraria || req.body, { new: true });
     if (!funeraria) return res.status(404).json({ message: 'Funeraria no encontrada.' });
     return res.status(200).json({ data: funeraria });
@@ -37,10 +37,21 @@ exports.update = async function (req, res) {
   }
 };
 
+exports.listUsers = async function (req, res) {
+  try {
+    const user = await AuthService.getUser(req);
+    AuthService.requirePermission(user, 'cementerio.admin');
+    const users = await User.find().select('_id username admin funerariaId').sort({ username: 1 });
+    return res.status(200).json({ data: users });
+  } catch (error) {
+    return sendError(res, error);
+  }
+};
+
 exports.associateUser = async function (req, res) {
   try {
     const currentUser = await AuthService.getUser(req);
-    AuthService.requirePermission(currentUser, 'cementerio.review');
+    AuthService.requirePermission(currentUser, 'cementerio.admin');
     const funeraria = await Funeraria.findById(req.params.id);
     if (!funeraria) return res.status(404).json({ message: 'Funeraria no encontrada.' });
     const user = await User.findById(req.params.userId).select('-password');

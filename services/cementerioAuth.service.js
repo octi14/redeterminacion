@@ -41,7 +41,9 @@ exports.requireAnyPermission = function (user, permissions) {
 };
 
 exports.canAccessAllCemetery = function (user) {
-  return exports.hasPermission(user, '*') || exports.hasPermission(user, 'cementerio.review');
+  return exports.hasPermission(user, '*') ||
+    exports.hasPermission(user, 'cementerio.review') ||
+    exports.hasPermission(user, 'cementerio.admin');
 };
 
 exports.resolveFunerariaId = function (user, requestedFunerariaId) {

@@ -5,9 +5,9 @@ const PERMISSIONS = {
   ROLES_MANAGE: "roles.manage",
 
   HABILITACIONES_READ: "habilitaciones.read",
-  HABILITACIONES_UPDATE: "habilitaciones.update",
   HABILITACIONES_STATUS: "habilitaciones.status",
   HABILITACIONES_EXPORT: "habilitaciones.export",
+  HABILITACIONES_VISIBILIDAD: "habilitaciones.visibilidad",
 
   TURNOS_READ: "turnos.read",
   TURNOS_UPDATE: "turnos.update",
@@ -18,10 +18,10 @@ const PERMISSIONS = {
 
   CEMENTERIO_READ: "cementerio.read",
   CEMENTERIO_UPDATE: "cementerio.update",
+  CEMENTERIO_CONFIRM: "cementerio.confirm",
   CEMENTERIO_REVIEW: "cementerio.review",
+  CEMENTERIO_ADMIN: "cementerio.admin",
 
-  COMPRAS_READ: "compras.read",
-  COMPRAS_UPDATE: "compras.update",
   COMPRAS_ORDENES_READ: "compras.ordenes.read",
   COMPRAS_ORDENES_UPDATE: "compras.ordenes.update",
   COMPRAS_ORDENES_DELETE: "compras.ordenes.delete",
@@ -30,15 +30,12 @@ const PERMISSIONS = {
   COMPRAS_VEHICULOS_MANAGE: "compras.vehiculos.manage",
   COMPRAS_DASHBOARD: "compras.dashboard",
 
-  HACIENDA_READ: "hacienda.read",
-  HACIENDA_UPDATE: "hacienda.update",
+  HACIENDA_OBRAS_READ: "hacienda.obras.read",
+  HACIENDA_OBRAS_UPDATE: "hacienda.obras.update",
+  HACIENDA_OBRAS_EXPORT: "hacienda.obras.export",
 
-  OBRAS_READ: "obras.read",
-  OBRAS_UPDATE: "obras.update",
-  OBRAS_EXPORT: "obras.export",
-
-  INDICES_READ: "indices.read",
-  INDICES_UPDATE: "indices.update",
+  HACIENDA_INDICES_READ: "hacienda.indices.read",
+  HACIENDA_INDICES_UPDATE: "hacienda.indices.update",
 
   ABIERTO_ANUAL_READ: "abiertoAnual.read",
   ABIERTO_ANUAL_UPDATE: "abiertoAnual.update",

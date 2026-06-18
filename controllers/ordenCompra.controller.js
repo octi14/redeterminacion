@@ -96,16 +96,6 @@ exports.update = async function (req, res) {
       return res.status(404).json({ message: "Orden de compra no encontrada." });
     }
 
-    const tieneVales = Array.isArray(orden.vales) && orden.vales.length > 0;
-    const context = await RbacService.getCurrentUserContext(req);
-    const puedeGestionarVales = RbacService.can(context.access.permissions, "compras.vales.update");
-    if (tieneVales && !puedeGestionarVales) {
-      return res.status(403).json({
-        message: "Solo se pueden editar ordenes sin vales asociados.",
-        permission: "compras.vales.update",
-      });
-    }
-
     const { nroOrden, area, proveedor, montos } = req.body.orden;
     const updated = await OrdenCompraService.update(id, {
       nroOrden,

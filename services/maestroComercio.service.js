@@ -51,21 +51,21 @@ exports.processCSV = async function(fileContent) {
 };
 
 exports.update = async function (id, update) {
-  return Certificado.findOneAndUpdate({ id: id }, update, {
+  return MaestroComercio.findByIdAndUpdate(id, update, {
     new: true,
   });
 };
 
 exports.delete = async function (id) {
-  return Certificado.deleteOne({ id: id });
+  return MaestroComercio.deleteOne({ _id: id });
 };
 
 exports.getById = async function (id) {
-  return Certificado.findById(id);
+  return MaestroComercio.findById(id);
 };
 
 exports.getMany = async function (ids) {
-  return Certificado.find().where("_id").in(ids);
+  return MaestroComercio.find().where("_id").in(ids);
 };
 
 exports.search = async function ({cuit, legajo}) {

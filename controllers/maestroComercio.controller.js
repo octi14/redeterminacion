@@ -32,27 +32,35 @@ exports.create = async function(req, res) {
 
 exports.update = async function (req, res) {
   try {
-    // TODO: validate req.params and req.body
     const { id } = req.params;
-    const certificado = await MaestroComercioService.getById(id);
     const {
-      nro,
-      fecha,
-      factura,
-      op,
-      fecha_cancelacion,
-    } = req.body.certificado;
+      legajo,
+      cuit,
+      denominacion,
+      mail,
+      titular,
+      telefono,
+      dfe,
+    } = req.body.maestro;
 
     const updated = await MaestroComercioService.update(id, {
-      nro: nro,
-      fecha: fecha,
-      factura: factura,
-      op: op,
-      fecha_cancelacion: fecha_cancelacion,
+      legajo,
+      cuit,
+      denominacion,
+      mail,
+      titular,
+      telefono,
+      dfe,
     });
 
+    if (!updated) {
+      return res.status(404).json({
+        message: "Registro de maestro comercial no encontrado.",
+      });
+    }
+
     return res.status(200).json({
-      message: "Certificado modificada.",
+      message: "Registro de maestro comercial modificado.",
       data: updated,
     });
   } catch (e) {
@@ -70,7 +78,7 @@ exports.delete = async function (req, res) {
     await MaestroComercioService.delete(id);
 
     return res.status(200).json({
-      message: "Certificado eliminada.",
+      message: "Registro de maestro comercial eliminado.",
     });
   } catch (e) {
     return res.status(400).json({

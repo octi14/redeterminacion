@@ -8,9 +8,9 @@ const TASAS = [
     formatos: ["completo", "simplificado"],
     importacionHabilitada: true,
     tema: {
-      principal: "#13875e",
-      oscuro: "#075e4a",
-      suave: "#e3f5ed",
+      principal: "#bd3041",
+      oscuro: "#771a28",
+      suave: "#fbdde1",
     },
   },
   {
@@ -22,9 +22,9 @@ const TASAS = [
     formatos: ["urbana"],
     importacionHabilitada: true,
     tema: {
-      principal: "#bd3041",
-      oscuro: "#771a28",
-      suave: "#fbdde1",
+      principal: "#13875e",
+      oscuro: "#075e4a",
+      suave: "#e3f5ed",
     },
   },
 ];

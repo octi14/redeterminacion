@@ -14,24 +14,71 @@ const s3 = new AWS.S3({
   region: process.env.AWS_REGION,
 });
 
-async function requireHabilitacionUpdatePermission(req, permission) {
+const TURNOS_HABILITACION_STATUSES = new Set([
+  'Esperando inspección',
+  'Inspeccionado',
+  'Prórroga 1',
+  'Prórroga 2',
+  'Rechazada',
+  'Esperando turno',
+]);
+
+async function requireHabilitacionUpdatePermissions(req, requirements) {
   const context = await RbacService.getCurrentUserContext(req);
-  if (!RbacService.can(context.access.permissions, permission)) {
+  const missingRequirement = requirements.find((requirement) => {
+    const alternatives = Array.isArray(requirement) ? requirement : [requirement];
+    return !alternatives.some((permission) => RbacService.can(context.access.permissions, permission));
+  });
+  if (missingRequirement) {
     const error = new Error('No tiene permisos para realizar esta acción.');
     error.status = 403;
-    error.permission = permission;
+    error.permissions = Array.isArray(missingRequirement) ? missingRequirement : [missingRequirement];
+    throw error;
+  }
+}
+
+function permissionsForHabilitacionUpdate(habilitacion) {
+  const requirements = [];
+  if (Object.prototype.hasOwnProperty.call(habilitacion, 'visible')) {
+    requirements.push('habilitaciones.visibilidad');
+  }
+  if (Object.prototype.hasOwnProperty.call(habilitacion, 'status')) {
+    requirements.push(
+      TURNOS_HABILITACION_STATUSES.has(habilitacion.status)
+        ? ['habilitaciones.status', 'turnos.update']
+        : 'habilitaciones.status'
+    );
+  }
+  if (!requirements.length) {
+    requirements.push('habilitaciones.update');
+  }
+  return requirements;
+}
+
+function canSeeInvisible(req) {
+  return RbacService.can(req.access?.permissions || [], 'habilitaciones.visibilidad');
+}
+
+function visibleOnlyFilter(req) {
+  return canSeeInvisible(req) ? {} : { visible: { $ne: false } };
+}
+
+function ensureVisibleAccess(req, habilitacion) {
+  if (habilitacion && habilitacion.visible === false && !canSeeInvisible(req)) {
+    const error = new Error('El tramite no esta disponible para este usuario.');
+    error.status = 404;
     throw error;
   }
 }
 
 exports.getAll = async function (req, res) {
   try {
-    const habilitacions = await HabilitacionService.findAll();
+    const habilitacions = await HabilitacionService.findAll(visibleOnlyFilter(req));
     return res.status(200).json({
       data: habilitacions,
     });
   } catch (e) {
-    return res.status(400).json({
+    return res.status(e.status || 400).json({
       message: e.message,
     });
   }
@@ -168,7 +215,7 @@ exports.delete = async function (req, res) {
       message: 'Habilitacion deleted.',
     });
   } catch (e) {
-    return res.status(400).json({
+    return res.status(e.status || 400).json({
       message: e.message,
     });
   }
@@ -178,11 +225,12 @@ exports.getById = async function (req, res) {
   try {
     const { id } = req.params;
     const habilitacion = await Habilitacion.findById(id).select('-documentos');
+    ensureVisibleAccess(req, habilitacion);
     return res.status(200).json({
       data: habilitacion,
     });
   } catch (e) {
-    return res.status(400).json({
+    return res.status(e.status || 400).json({
       message: e.message,
     });
   }
@@ -194,6 +242,7 @@ exports.getDocumentosById = async (req, res) => {
     const { id } = req.params;
     const habilitacion = await Habilitacion.findById(id).select('documentos');
     const datosHab = await Habilitacion.findById(id).select('-documentos');
+    ensureVisibleAccess(req, datosHab);
 
     if (!habilitacion) {
       return res.status(404).json({
@@ -276,7 +325,7 @@ exports.getDocumentosById = async (req, res) => {
       data: documentosObtenidos,
     });
   } catch (e) {
-    return res.status(400).json({
+    return res.status(e.status || 400).json({
       message: e.message,
     });
   }
@@ -444,10 +493,7 @@ exports.update = async (req, res) => {
     const { id } = req.params;
     const camposActualizados = req.body || {};
     const habilitacion = camposActualizados.habilitacion || {};
-    const permission = Object.prototype.hasOwnProperty.call(habilitacion, 'status')
-      ? 'habilitaciones.status'
-      : 'habilitaciones.update';
-    await requireHabilitacionUpdatePermission(req, permission);
+    await requireHabilitacionUpdatePermissions(req, permissionsForHabilitacionUpdate(habilitacion));
 
     const documentoActualizado = await HabilitacionService.update(id, habilitacion);
 
@@ -459,6 +505,7 @@ exports.update = async (req, res) => {
     return res.status(error.status || 400).json({
       message: error.message,
       permission: error.permission,
+      permissions: error.permissions,
     });
   }
 };
@@ -468,10 +515,7 @@ exports.updateLazy = async (req, res) => {
     const { id } = req.params;
     const camposActualizados = req.body || {};
     const habilitacion = camposActualizados.habilitacion || {};
-    const permission = Object.prototype.hasOwnProperty.call(habilitacion, 'status')
-      ? 'habilitaciones.status'
-      : 'habilitaciones.update';
-    await requireHabilitacionUpdatePermission(req, permission);
+    await requireHabilitacionUpdatePermissions(req, permissionsForHabilitacionUpdate(habilitacion));
 
     const documentoActualizado = await HabilitacionService.updateLazy(id, habilitacion);
 
@@ -483,6 +527,7 @@ exports.updateLazy = async (req, res) => {
     return res.status(error.status || 400).json({
       message: error.message,
       permission: error.permission,
+      permissions: error.permissions,
     });
   }
 };

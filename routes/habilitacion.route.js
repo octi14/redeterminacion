@@ -8,8 +8,8 @@ const RbacService = require("../services/experimentalRbac.service");
 // endpoints
 router.get("/", RbacService.requirePermission("habilitaciones.read"), HabilitacionController.getAll);
 router.post("/", HabilitacionController.add);
-router.put("/:id", RbacService.requirePermission("habilitaciones.update"), HabilitacionController.update);
-router.put("/lazy/:id", RbacService.requirePermission("habilitaciones.update"), HabilitacionController.updateLazy);
+router.put("/:id", RbacService.requireAnyPermission(["habilitaciones.status", "habilitaciones.visibilidad", "habilitaciones.update", "turnos.update"]), HabilitacionController.update);
+router.put("/lazy/:id", RbacService.requireAnyPermission(["habilitaciones.status", "habilitaciones.visibilidad", "habilitaciones.update", "turnos.update"]), HabilitacionController.updateLazy);
 // router.delete("/:id", ObraController.delete);
 router.get("/:id", RbacService.requirePermission("habilitaciones.read"), HabilitacionController.getById);
 router.get("/documentos/:id", RbacService.requirePermission("habilitaciones.read"), HabilitacionController.getDocumentosById);

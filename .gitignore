@@ -3,3 +3,7 @@
 .env.example
 scripts/bajarAbierto.js
 scripts/local/
+scripts/seed*
+scripts/migrate*
+scripts/assign*
+docs/

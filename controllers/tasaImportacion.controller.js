@@ -21,6 +21,10 @@ function requireArchivo(req) {
   return req.archivoTemporal;
 }
 
+function usuarioActual(req) {
+  return req.currentUser || req.authenticatedUser;
+}
+
 exports.analizar = async function (req, res) {
   let archivo;
   try {
@@ -31,7 +35,7 @@ exports.analizar = async function (req, res) {
       fileSize: archivo.size,
       fileName: fileName(req),
       tipoTasa: tipoTasa(req),
-      user: req.authenticatedUser,
+      user: usuarioActual(req),
     });
     archivo = null;
     return res.status(202).json({ data: importacion });
@@ -53,7 +57,7 @@ exports.publicar = async function (req, res) {
       confirmarReemplazo: req.headers["x-confirmar-reemplazo"] === "true",
       confirmarPeriodosFuturos: req.headers["x-confirmar-periodos-futuros"] === "true",
       guardarOriginal: req.headers["x-guardar-original"] === "true",
-      user: req.authenticatedUser,
+      user: usuarioActual(req),
     });
     archivo = null;
     return res.status(202).json({ data: importacion });

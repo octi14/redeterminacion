@@ -560,6 +560,9 @@ async function ejecutarAnalisisArchivo({ importacionId, filePath, tipoTasa }) {
 }
 
 async function iniciarAnalisis({ filePath, fileHash, fileSize, fileName, tipoTasa = "AUTOMOTORES", user }) {
+  if (!user || !user._id) {
+    throw Object.assign(new Error("Usuario autenticado requerido para importar boletas."), { status: 401 });
+  }
   TasaCatalogo.requerir(tipoTasa, { importable: true });
   for (let intento = 0; intento < 10; intento += 1) {
     const nombreArchivo = await nombreArchivoDisponible(fileName, tipoTasa);
@@ -779,6 +782,9 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
 }
 
 async function iniciarPublicacion({ importacionId, filePath, fileHash, confirmarReemplazo, confirmarPeriodosFuturos, guardarOriginal, user }) {
+  if (!user || !user._id) {
+    throw Object.assign(new Error("Usuario autenticado requerido para publicar boletas."), { status: 401 });
+  }
   const importacion = await TasaImportacion.findById(importacionId);
   if (!importacion) throw Object.assign(new Error("Intento de importación no encontrado."), { status: 404 });
   if (!["analizada", "fallida"].includes(importacion.estado)) {

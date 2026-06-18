@@ -15,10 +15,10 @@ const RbacService = require("../services/experimentalRbac.service");
 // });
 
 // "/obras" endpoints
-router.get("/", RbacService.requirePermission("obras.read"), ObraController.getAll);
-router.post("/", RbacService.requirePermission("obras.update"), ObraController.add);
-router.put("/:id", RbacService.requirePermission("obras.update"), ObraController.update);
-router.delete("/:id", RbacService.requirePermission("obras.update"), ObraController.delete);
-router.get("/:id", RbacService.requirePermission("obras.read"), ObraController.getById);
-router.post("/search", RbacService.requirePermission("obras.read"), ObraController.search);
+router.get("/", RbacService.requirePermission("hacienda.obras.read"), ObraController.getAll);
+router.post("/", RbacService.requirePermission("hacienda.obras.update"), ObraController.add);
+router.put("/:id", RbacService.requirePermission("hacienda.obras.update"), ObraController.update);
+router.delete("/:id", RbacService.requirePermission("hacienda.obras.update"), ObraController.delete);
+router.get("/:id", RbacService.requirePermission("hacienda.obras.read"), ObraController.getById);
+router.post("/search", RbacService.requirePermission("hacienda.obras.read"), ObraController.search);
 module.exports = router;

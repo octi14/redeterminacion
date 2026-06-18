@@ -10,7 +10,7 @@ const sendError = (res, error) => res.status(error.status || 400).json({ message
 exports.getAll = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requirePermission(user, 'cementerio.review');
+    AuthService.requireAnyPermission(user, ['cementerio.review', 'cementerio.admin']);
     if (AuthService.canAccessAllCemetery(user)) {
       const funerarias = await Funeraria.find({ activa: true }).select('_id');
       await Promise.all(funerarias.map(item => PeriodoService.getOrCreateOpenPeriod(item._id)));
@@ -24,7 +24,7 @@ exports.getAll = async function (req, res) {
 exports.getMine = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.update']);
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.update', 'cementerio.admin']);
     const funerariaId = AuthService.canAccessAllCemetery(user) ? req.query.funerariaId : user.funerariaId;
     if (!funerariaId) throw Object.assign(new Error('Debe seleccionar o tener asociada una funeraria.'), { status: 400 });
     await PeriodoService.getOrCreateOpenPeriod(funerariaId);
@@ -37,7 +37,7 @@ exports.getMine = async function (req, res) {
 exports.getById = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review']);
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review', 'cementerio.admin']);
     const periodo = await PeriodoService.getPeriodWithDetails(req.params.id);
     if (!periodo) return res.status(404).json({ message: 'Período no encontrado.' });
     AuthService.ensureFunerariaAccess(user, periodo.funerariaId);
@@ -50,7 +50,7 @@ exports.getById = async function (req, res) {
 exports.confirm = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requirePermission(user, 'cementerio.update');
+    AuthService.requirePermission(user, 'cementerio.confirm');
     const periodo = await PeriodoCementerio.findById(req.params.id);
     if (!periodo) return res.status(404).json({ message: 'Período no encontrado.' });
     AuthService.ensureFunerariaAccess(user, periodo.funerariaId);

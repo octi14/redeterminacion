@@ -89,6 +89,27 @@ exports.requirePermission = function (permission) {
   };
 };
 
+exports.requireAnyPermission = function (permissions) {
+  return async function (req, res, next) {
+    try {
+      const context = await exports.getCurrentUserContext(req);
+      req.currentUser = context.user;
+      req.access = context.access;
+
+      if (!permissions.some((permission) => can(context.access.permissions, permission))) {
+        return res.status(403).json({
+          message: "No tiene permisos para realizar esta accion.",
+          permissions,
+        });
+      }
+
+      return next();
+    } catch (error) {
+      return res.status(error.status || 500).json({ message: error.message });
+    }
+  };
+};
+
 exports.can = can;
 
 exports.listRoles = async function () {

@@ -9,7 +9,7 @@ const StorageService = require('../services/cementerioStorage.service');
 exports.getAll = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review']);
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review', 'cementerio.admin']);
     const filter = AuthService.canAccessAllCemetery(user) ? {} : { funerariaId: user.funerariaId };
     const items = await Service.findAll(filter);
     return res.status(200).json({ data: items });
@@ -115,7 +115,7 @@ exports.delete = async function (req, res) {
 exports.getById = async function (req, res) {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review']);
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review', 'cementerio.admin']);
     const { id } = req.params;
     const item = await CertificadoDefuncion.findById(id).select('-documentos');
     if (!item) return res.status(404).json({ message: 'Registro no encontrado.' });
@@ -129,7 +129,7 @@ exports.getById = async function (req, res) {
 exports.getDocumentosById = async (req, res) => {
   try {
     const user = await AuthService.getUser(req);
-    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review']);
+    AuthService.requireAnyPermission(user, ['cementerio.read', 'cementerio.review', 'cementerio.admin']);
     const { id } = req.params;
     const item = await CertificadoDefuncion.findById(id).select('documentos funerariaId');
     if (!item) return res.status(404).json({ message: 'no encontrada.' });
