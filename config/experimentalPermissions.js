@@ -40,6 +40,7 @@ const PERMISSIONS = {
   ABIERTO_ANUAL_READ: "abiertoAnual.read",
   ABIERTO_ANUAL_UPDATE: "abiertoAnual.update",
   ABIERTO_ANUAL_EXPORT: "abiertoAnual.export",
+  ABIERTO_ANUAL_ADMIN: "abiertoAnual.admin",
 
   MAESTRO_COMERCIAL_READ: "maestroComercial.read",
   MAESTRO_COMERCIAL_UPDATE: "maestroComercial.update",

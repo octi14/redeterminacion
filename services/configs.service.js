@@ -47,12 +47,54 @@ const DEFAULT_ABIERTO_ANUAL = {
     { min: '01/10', max: '31/10' },
   ],
   rectificacion: { min: '01/11', max: '30/11' },
+  rectificacionGlobal: undefined,
 };
 
 // Parsea "DD/MM" y devuelve Date a 00:00:00 en el año dado
 function parseDDMM(str, year) {
   const [d, m] = str.split('/').map(Number);
   return new Date(year, m - 1, d);
+}
+
+function isValidDDMM(value) {
+  if (!/^\d{2}\/\d{2}$/.test(String(value || ''))) return false;
+  const [day, month] = String(value).split('/').map(Number);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const date = new Date(2024, month - 1, day);
+  return date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+function normalizeAbiertoAnualConfig(value = {}) {
+  const periodos = Array.isArray(value.periodos) ? value.periodos : [];
+  if (periodos.length !== 3) {
+    const error = new Error('La configuracion de abierto anual debe tener 3 periodos.');
+    error.status = 400;
+    throw error;
+  }
+
+  const normalizedPeriodos = periodos.map((periodo, index) => {
+    if (!isValidDDMM(periodo.min) || !isValidDDMM(periodo.max)) {
+      const error = new Error(`Las fechas del periodo ${index + 1} deben tener formato DD/MM valido.`);
+      error.status = 400;
+      throw error;
+    }
+    return { min: periodo.min, max: periodo.max };
+  });
+
+  const rectificacion = value.rectificacion || DEFAULT_ABIERTO_ANUAL.rectificacion;
+  if (!isValidDDMM(rectificacion.min) || !isValidDDMM(rectificacion.max)) {
+    const error = new Error('Las fechas de rectificacion deben tener formato DD/MM valido.');
+    error.status = 400;
+    throw error;
+  }
+
+  return {
+    periodos: normalizedPeriodos,
+    rectificacion: { min: rectificacion.min, max: rectificacion.max },
+    rectificacionGlobal: typeof value.rectificacionGlobal === 'boolean'
+      ? value.rectificacionGlobal
+      : undefined,
+  };
 }
 
 // Devuelve la config de períodos lista para el front: minDates, maxDates (DD/MM/YYYY), rectificacion y popUpAbiertoAnualCerrado (calculados, fechas inclusivas)
@@ -71,13 +113,17 @@ exports.getAbiertoAnualPeriodosForFront = async () => {
   if (!raw || !raw.periodos || !raw.rectificacion) {
     raw = DEFAULT_ABIERTO_ANUAL;
   }
+  raw = normalizeAbiertoAnualConfig(raw);
 
   const minDates = raw.periodos.map((p) => `${p.min}/${year}`);
   const maxDates = raw.periodos.map((p) => `${p.max}/${year}`);
 
   const rectMin = parseDDMM(raw.rectificacion.min, year);
   const rectMax = parseDDMM(raw.rectificacion.max, year);
-  const rectificacion = todayStart >= rectMin.getTime() && todayStart <= rectMax.getTime();
+  const rectificacionPorFecha = todayStart >= rectMin.getTime() && todayStart <= rectMax.getTime();
+  const rectificacion = typeof raw.rectificacionGlobal === 'boolean'
+    ? raw.rectificacionGlobal
+    : rectificacionPorFecha;
 
   const primerDiaPeriodo1 = parseDDMM(raw.periodos[0].min, year);
   const ultimoDiaRect = parseDDMM(raw.rectificacion.max, year);
@@ -87,6 +133,24 @@ exports.getAbiertoAnualPeriodosForFront = async () => {
     minDates,
     maxDates,
     rectificacion,
+    rectificacionGlobal: raw.rectificacionGlobal,
+    rectificacionPorFecha,
+    raw,
     popUpAbiertoAnualCerrado,
   };
+};
+
+exports.updateAbiertoAnualPeriodos = async (value) => {
+  const normalized = normalizeAbiertoAnualConfig(value);
+  const updatedConfig = await Config.findOneAndUpdate(
+    { key: 'abiertoAnualPeriodos' },
+    {
+      key: 'abiertoAnualPeriodos',
+      value: normalized,
+      description: 'Ventanas de periodos y rectificacion global de abierto anual.',
+    },
+    { new: true, upsert: true, runValidators: true }
+  );
+  await exports.loadConfigs();
+  return updatedConfig;
 };
