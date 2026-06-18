@@ -1,6 +1,20 @@
 const Config = require('../models/configs.model');
 
 let cachedConfigs = {};
+const GENERAL_CONFIG_KEYS = {
+  mailerEnabled: {
+    defaultValue: false,
+    description: 'Habilitar o deshabilitar envio automatico de mails.',
+  },
+  logActivityEnabled: {
+    defaultValue: true,
+    description: 'Habilitar o deshabilitar logging de actividad de usuarios.',
+  },
+  maintenanceMode: {
+    defaultValue: false,
+    description: 'Modo de mantenimiento activado o desactivado.',
+  },
+};
 
 // Carga todas las configuraciones en memoria
 exports.loadConfigs = async () => {
@@ -37,6 +51,47 @@ exports.getConfigFromDB = async (key) => {
     console.error('Error al obtener configuración de la base de datos:', err.message);
     throw err;
   }
+};
+
+exports.getGeneralConfig = async () => {
+  const configs = await Config.find({
+    key: { $in: Object.keys(GENERAL_CONFIG_KEYS) },
+  });
+  const byKey = configs.reduce((acc, config) => {
+    acc[config.key] = config.value;
+    return acc;
+  }, {});
+
+  return Object.entries(GENERAL_CONFIG_KEYS).reduce((acc, [key, definition]) => {
+    acc[key] = typeof byKey[key] === 'boolean' ? byKey[key] : definition.defaultValue;
+    return acc;
+  }, {});
+};
+
+exports.updateGeneralConfig = async (value = {}) => {
+  const invalidKey = Object.keys(value).find((key) => !GENERAL_CONFIG_KEYS[key]);
+  if (invalidKey) {
+    const error = new Error(`La configuracion "${invalidKey}" no es valida.`);
+    error.status = 400;
+    throw error;
+  }
+
+  const updatedConfigs = [];
+  for (const [key, definition] of Object.entries(GENERAL_CONFIG_KEYS)) {
+    const updatedConfig = await Config.findOneAndUpdate(
+      { key },
+      {
+        key,
+        value: typeof value[key] === 'boolean' ? value[key] : definition.defaultValue,
+        description: definition.description,
+      },
+      { new: true, upsert: true, runValidators: true }
+    );
+    updatedConfigs.push(updatedConfig);
+  }
+
+  await exports.loadConfigs();
+  return updatedConfigs;
 };
 
 // Valor por defecto para abiertoAnualPeriodos (solo día/mes; el año se aplica al responder)

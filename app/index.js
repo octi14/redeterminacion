@@ -58,6 +58,9 @@ app.get("/", (_req, res) => {
 app.use((req, res, next) => {
   try {
     const maintenanceMode = getCachedConfig('maintenanceMode');
+    if (req.path.startsWith('/config/general') || req.path.startsWith('/api/mailer/templates')) {
+      return next();
+    }
     if (maintenanceMode) {
       return res.status(503).json({ message: "El sitio está en mantenimiento. Intente más tarde." });
     }

@@ -47,6 +47,7 @@ const PERMISSIONS = {
 
   DASHBOARD_READ: "dashboard.read",
   ACTIVITIES_READ: "activities.read",
+  SYSTEM_CONFIG_ADMIN: "system.config.admin",
 
   BOLETAS_MANAGE: "boletas.manage",
 

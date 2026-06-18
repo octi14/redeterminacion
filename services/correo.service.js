@@ -1,5 +1,14 @@
 const nodemailer = require('nodemailer');
 
+exports.getFooter = () => `
+
+Saludos cordiales,
+Municipalidad de Villa Gesell
+
+---
+Este es un correo automatico, por favor no responda a esta direccion.
+Para consultas, comuniquese con el area correspondiente.`;
+
 exports.enviarCorreo = async (destinatario, asunto, mensaje) => {
   const transporter = nodemailer.createTransport({
     host: 'mail.gesell.gob.ar', // Proporcionado por el proveedor

@@ -1,8 +1,33 @@
 const express = require('express');
 const Config = require('../models/configs.model');
 const RbacService = require('../services/experimentalRbac.service');
-const { loadConfigs, getAbiertoAnualPeriodosForFront, updateAbiertoAnualPeriodos } = require('../services/configs.service');
+const {
+  loadConfigs,
+  getAbiertoAnualPeriodosForFront,
+  updateAbiertoAnualPeriodos,
+  getGeneralConfig,
+  updateGeneralConfig,
+} = require('../services/configs.service');
 const router = express.Router();
+
+router.get('/general', RbacService.requirePermission('system.config.admin'), async (req, res) => {
+  try {
+    const data = await getGeneralConfig();
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+router.put('/general', RbacService.requirePermission('system.config.admin'), async (req, res) => {
+  try {
+    await updateGeneralConfig(req.body);
+    const data = await getGeneralConfig();
+    res.status(200).json({ message: 'Configuracion general actualizada.', data });
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
 
 router.get('/abiertoAnualPeriodos', async (req, res) => {
   try {
