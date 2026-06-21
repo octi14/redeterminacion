@@ -1,6 +1,7 @@
 const TasaBoleta = require("../models/tasaBoleta.model");
 const TasaAutomotorPdf = require("../services/tasaAutomotorPdf.service");
 const TasaBoletaDatos = require("../services/tasaBoletaDatos.service");
+const TasaCatalogo = require("../services/tasaCatalogo.service");
 
 const MAX_PERIODOS_POR_DESCARGA = 20;
 
@@ -26,6 +27,7 @@ function filtroPeriodos(periodos) {
 
 exports.buscar = async function buscar(req, res) {
   try {
+    await TasaCatalogo.requerirImportable("AUTOMOTORES");
     const dominio = validarDominio(req, res);
     if (!dominio) return;
     const boletas = await TasaBoleta.find({
@@ -58,12 +60,13 @@ exports.buscar = async function buscar(req, res) {
       },
     });
   } catch (error) {
-    return res.status(500).json({ message: "No se pudieron consultar las boletas." });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "No se pudieron consultar las boletas." });
   }
 };
 
 exports.descargar = async function descargar(req, res) {
   try {
+    await TasaCatalogo.requerirImportable("AUTOMOTORES");
     const dominio = validarDominio(req, res);
     if (!dominio) return;
     const periodos = Array.isArray(req.body.periodos) ? [...new Set(req.body.periodos)] : [];
@@ -93,6 +96,6 @@ exports.descargar = async function descargar(req, res) {
     return res.send(pdf);
   } catch (error) {
     console.error("Error al generar boleta automotor:", error);
-    return res.status(500).json({ message: "No se pudo generar el PDF de las boletas." });
+    return res.status(error.status || 500).json({ message: error.status ? error.message : "No se pudo generar el PDF de las boletas." });
   }
 };

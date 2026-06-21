@@ -1,18 +1,65 @@
 const Config = require('../models/configs.model');
+const TasaCatalogo = require('./tasaCatalogo.service');
 
 let cachedConfigs = {};
+const DEFAULT_BOLETA_TASAS_COLORS = {
+  AUTOMOTORES: {
+    principal: '#bd3041',
+    oscuro: '#771a28',
+    suave: '#fbdde1',
+  },
+  URBANA: {
+    principal: '#13875e',
+    oscuro: '#075e4a',
+    suave: '#e3f5ed',
+  },
+};
+
+function isHexColor(value) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(value || ''));
+}
+
+function normalizeBoletaTasasColors(value = {}) {
+  return Object.keys(DEFAULT_BOLETA_TASAS_COLORS).reduce((acc, taxKey) => {
+    acc[taxKey] = Object.keys(DEFAULT_BOLETA_TASAS_COLORS[taxKey]).reduce((colors, colorKey) => {
+      const candidate = value && value[taxKey] ? value[taxKey][colorKey] : '';
+      colors[colorKey] = isHexColor(candidate) ? candidate : DEFAULT_BOLETA_TASAS_COLORS[taxKey][colorKey];
+      return colors;
+    }, {});
+    return acc;
+  }, {});
+}
+
 const GENERAL_CONFIG_KEYS = {
   mailerEnabled: {
     defaultValue: false,
     description: 'Habilitar o deshabilitar envio automatico de mails.',
+    normalize: (value) => Boolean(value),
   },
   logActivityEnabled: {
     defaultValue: true,
     description: 'Habilitar o deshabilitar logging de actividad de usuarios.',
+    normalize: (value) => value !== false,
   },
   maintenanceMode: {
     defaultValue: false,
     description: 'Modo de mantenimiento activado o desactivado.',
+    normalize: (value) => Boolean(value),
+  },
+  boletaTasasUploadEnabled: {
+    defaultValue: true,
+    description: 'Habilita o deshabilita el almacenamiento del archivo original de importaciones de boletas.',
+    normalize: (value) => value !== false,
+  },
+  boletaTasasImportaciones: {
+    defaultValue: TasaCatalogo.normalizarImportacionesConfig(),
+    description: 'Habilita o deshabilita los modulos de importacion de boletas por tipo de tasa.',
+    normalize: (value) => TasaCatalogo.normalizarImportacionesConfig(value),
+  },
+  boletaTasasColors: {
+    defaultValue: DEFAULT_BOLETA_TASAS_COLORS,
+    description: 'Colores usados para generar boletas de tasas.',
+    normalize: normalizeBoletaTasasColors,
   },
 };
 
@@ -63,7 +110,7 @@ exports.getGeneralConfig = async () => {
   }, {});
 
   return Object.entries(GENERAL_CONFIG_KEYS).reduce((acc, [key, definition]) => {
-    acc[key] = typeof byKey[key] === 'boolean' ? byKey[key] : definition.defaultValue;
+    acc[key] = definition.normalize(Object.prototype.hasOwnProperty.call(byKey, key) ? byKey[key] : definition.defaultValue);
     return acc;
   }, {});
 };
@@ -82,12 +129,16 @@ exports.updateGeneralConfig = async (value = {}) => {
       { key },
       {
         key,
-        value: typeof value[key] === 'boolean' ? value[key] : definition.defaultValue,
+        value: definition.normalize(Object.prototype.hasOwnProperty.call(value, key) ? value[key] : definition.defaultValue),
         description: definition.description,
       },
       { new: true, upsert: true, runValidators: true }
     );
     updatedConfigs.push(updatedConfig);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, 'boletaTasasImportaciones')) {
+    await TasaCatalogo.actualizarImportacionesConfig(value.boletaTasasImportaciones);
   }
 
   await exports.loadConfigs();

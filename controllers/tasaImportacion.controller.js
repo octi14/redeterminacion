@@ -177,8 +177,12 @@ exports.listarPeriodos = async function (_req, res) {
   }
 };
 
-exports.listarTipos = function (_req, res) {
-  return res.status(200).json({ data: TasaCatalogo.listar() });
+exports.listarTipos = async function (_req, res) {
+  try {
+    return res.status(200).json({ data: await TasaCatalogo.listarConConfig() });
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.message });
+  }
 };
 
 exports.cambiarEstadoPeriodo = async function (req, res) {

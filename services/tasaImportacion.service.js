@@ -411,14 +411,11 @@ function periodoPartes(periodo) {
   return { anio, cuota };
 }
 
-function filtroPeriodos(periodos) {
-  return { $or: periodos.map(periodoPartes) };
-}
-
-async function periodosActivosExistentes(tipoTasa, periodos) {
+async function periodosActivosDeTasa(tipoTasa) {
   const rows = await TasaBoleta.aggregate([
-    { $match: { tipoTasa, activa: true, ...filtroPeriodos(periodos) } },
+    { $match: { tipoTasa, activa: true } },
     { $group: { _id: { anio: "$anio", cuota: "$cuota" } } },
+    { $sort: { "_id.anio": 1, "_id.cuota": 1 } },
   ]);
   return rows.map((row) => `${String(row._id.cuota).padStart(2, "0")}/${row._id.anio}`);
 }
@@ -458,12 +455,18 @@ function claveNombreArchivo(fileName) {
 }
 
 async function guardarOriginalHabilitado(tipoTasa = "AUTOMOTORES") {
+  if (!(await gestorBoletasUploadHabilitado())) return false;
   const key = `guardarArchivoOriginalTasas:${tipoTasa}`;
   let config = await Config.findOne({ key });
   if (!config && tipoTasa === "AUTOMOTORES") {
     config = await Config.findOne({ key: "guardarArchivoOriginalTasas" });
   }
   return Boolean(config && config.value === true);
+}
+
+async function gestorBoletasUploadHabilitado() {
+  const config = await Config.findOne({ key: "boletaTasasUploadEnabled" }).lean();
+  return !config || config.value !== false;
 }
 
 async function subirOriginalArchivo(filePath, importacion, fileName) {
@@ -563,7 +566,7 @@ async function iniciarAnalisis({ filePath, fileHash, fileSize, fileName, tipoTas
   if (!user || !user._id) {
     throw Object.assign(new Error("Usuario autenticado requerido para importar boletas."), { status: 401 });
   }
-  TasaCatalogo.requerir(tipoTasa, { importable: true });
+  await TasaCatalogo.requerirImportable(tipoTasa);
   for (let intento = 0; intento < 10; intento += 1) {
     const nombreArchivo = await nombreArchivoDisponible(fileName, tipoTasa);
     try {
@@ -711,10 +714,10 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
       throw new Error(`Se esperaban ${importacion.cantidadEntradas} boletas, pero se prepararon ${insertadas}.`);
     }
 
-    await actualizarProgreso(importacion._id, "activando", insertadas, insertadas, "Activando períodos y reemplazando versiones anteriores.");
+    await actualizarProgreso(importacion._id, "activando", insertadas, insertadas, "Activando períodos nuevos y deshabilitando cargas anteriores.");
     await session.withTransaction(async () => {
       await TasaBoleta.updateMany(
-        { tipoTasa: importacion.tipoTasa, ...filtroPeriodos(importacion.periodos), activa: true, importacionId: { $ne: importacion._id } },
+        { tipoTasa: importacion.tipoTasa, activa: true, importacionId: { $ne: importacion._id } },
         { $set: { activa: false } },
         { session }
       );
@@ -724,11 +727,11 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
         _id: { $ne: importacion._id },
         tipoTasa: importacion.tipoTasa,
         estado: { $in: ["publicada", "reemplazada_parcialmente"] },
-        periodosActivos: { $in: importacion.periodos },
+        periodosActivos: { $exists: true, $ne: [] },
       }).session(session);
       for (const anterior of anteriores) {
-        anterior.periodosActivos = anterior.periodosActivos.filter((periodo) => !importacion.periodos.includes(periodo));
-        anterior.estado = anterior.periodosActivos.length ? "reemplazada_parcialmente" : "reemplazada";
+        anterior.periodosActivos = [];
+        anterior.estado = "reemplazada";
         await anterior.save({ session });
       }
 
@@ -790,6 +793,7 @@ async function iniciarPublicacion({ importacionId, filePath, fileHash, confirmar
   if (!["analizada", "fallida"].includes(importacion.estado)) {
     throw Object.assign(new Error("La importación ya no puede publicarse."), { status: 409 });
   }
+  await TasaCatalogo.requerirImportable(importacion.tipoTasa);
   if (fileHash !== importacion.hashArchivo) {
     throw Object.assign(new Error("El archivo no coincide con el archivo analizado."), { status: 409 });
   }
@@ -799,9 +803,9 @@ async function iniciarPublicacion({ importacionId, filePath, fileHash, confirmar
   if (periodosFuturos.length && !confirmarPeriodosFuturos) {
     throw Object.assign(new Error(`La carga contiene períodos posteriores al año actual (${anioActual}). Confirmá expresamente para continuar.`), { status: 409, periodosFuturos });
   }
-  const conflictos = await periodosActivosExistentes(importacion.tipoTasa, importacion.periodos);
+  const conflictos = await periodosActivosDeTasa(importacion.tipoTasa);
   if (conflictos.length && !confirmarReemplazo) {
-    throw Object.assign(new Error("Existen períodos publicados que serán reemplazados."), { status: 409, conflictos });
+    throw Object.assign(new Error("Existen períodos publicados que serán deshabilitados al publicar esta carga."), { status: 409, conflictos });
   }
 
   importacion.estado = "publicando";
@@ -1018,5 +1022,6 @@ module.exports = {
   cambiarEstadoPeriodo,
   deshabilitarImportacion,
   guardarOriginalHabilitado,
+  gestorBoletasUploadHabilitado,
   actualizarConfiguracionGuardarOriginal,
 };

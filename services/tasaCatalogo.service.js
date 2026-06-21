@@ -1,3 +1,7 @@
+const Config = require("../models/configs.model");
+
+const IMPORTACIONES_CONFIG_KEY = "boletaTasasImportaciones";
+
 const TASAS = [
   {
     codigo: "AUTOMOTORES",
@@ -29,8 +33,42 @@ const TASAS = [
   },
 ];
 
+function normalizarImportacionesConfig(value = {}) {
+  return TASAS.reduce((acc, tasa) => {
+    acc[tasa.codigo] = typeof value[tasa.codigo] === "boolean"
+      ? value[tasa.codigo]
+      : Boolean(tasa.importacionHabilitada);
+    return acc;
+  }, {});
+}
+
+async function obtenerImportacionesConfig() {
+  const config = await Config.findOne({ key: IMPORTACIONES_CONFIG_KEY }).lean();
+  return normalizarImportacionesConfig(config ? config.value : {});
+}
+
+async function actualizarImportacionesConfig(value = {}) {
+  return Config.findOneAndUpdate(
+    { key: IMPORTACIONES_CONFIG_KEY },
+    {
+      key: IMPORTACIONES_CONFIG_KEY,
+      value: normalizarImportacionesConfig(value),
+      description: "Habilita o deshabilita los modulos de importacion de boletas por tipo de tasa.",
+    },
+    { new: true, upsert: true, runValidators: true }
+  );
+}
+
 function listar() {
   return TASAS.map((tasa) => ({ ...tasa }));
+}
+
+async function listarConConfig() {
+  const config = await obtenerImportacionesConfig();
+  return TASAS.map((tasa) => ({
+    ...tasa,
+    importacionHabilitada: config[tasa.codigo] !== false,
+  }));
 }
 
 function obtener(codigo) {
@@ -46,4 +84,23 @@ function requerir(codigo, { importable = false } = {}) {
   return tasa;
 }
 
-module.exports = { listar, obtener, requerir };
+async function requerirImportable(codigo) {
+  const tasa = requerir(codigo);
+  const config = await obtenerImportacionesConfig();
+  if (config[tasa.codigo] === false) {
+    throw Object.assign(new Error(`El modulo de ${tasa.nombre} esta deshabilitado desde configuraciones generales.`), { status: 409 });
+  }
+  return { ...tasa, importacionHabilitada: true };
+}
+
+module.exports = {
+  IMPORTACIONES_CONFIG_KEY,
+  actualizarImportacionesConfig,
+  listar,
+  listarConConfig,
+  normalizarImportacionesConfig,
+  obtener,
+  obtenerImportacionesConfig,
+  requerir,
+  requerirImportable,
+};
