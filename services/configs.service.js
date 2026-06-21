@@ -2,33 +2,6 @@ const Config = require('../models/configs.model');
 const TasaCatalogo = require('./tasaCatalogo.service');
 
 let cachedConfigs = {};
-const DEFAULT_BOLETA_TASAS_COLORS = {
-  AUTOMOTORES: {
-    principal: '#bd3041',
-    oscuro: '#771a28',
-    suave: '#fbdde1',
-  },
-  URBANA: {
-    principal: '#13875e',
-    oscuro: '#075e4a',
-    suave: '#e3f5ed',
-  },
-};
-
-function isHexColor(value) {
-  return /^#[0-9a-fA-F]{6}$/.test(String(value || ''));
-}
-
-function normalizeBoletaTasasColors(value = {}) {
-  return Object.keys(DEFAULT_BOLETA_TASAS_COLORS).reduce((acc, taxKey) => {
-    acc[taxKey] = Object.keys(DEFAULT_BOLETA_TASAS_COLORS[taxKey]).reduce((colors, colorKey) => {
-      const candidate = value && value[taxKey] ? value[taxKey][colorKey] : '';
-      colors[colorKey] = isHexColor(candidate) ? candidate : DEFAULT_BOLETA_TASAS_COLORS[taxKey][colorKey];
-      return colors;
-    }, {});
-    return acc;
-  }, {});
-}
 
 const GENERAL_CONFIG_KEYS = {
   mailerEnabled: {
@@ -57,9 +30,9 @@ const GENERAL_CONFIG_KEYS = {
     normalize: (value) => TasaCatalogo.normalizarImportacionesConfig(value),
   },
   boletaTasasColors: {
-    defaultValue: DEFAULT_BOLETA_TASAS_COLORS,
+    defaultValue: TasaCatalogo.normalizarColoresConfig(),
     description: 'Colores usados para generar boletas de tasas.',
-    normalize: normalizeBoletaTasasColors,
+    normalize: (value) => TasaCatalogo.normalizarColoresConfig(value),
   },
 };
 

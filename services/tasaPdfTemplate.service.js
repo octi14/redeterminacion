@@ -18,7 +18,7 @@ function linea(page, x1, y1, x2, y2, color, thickness = 0.7) {
 }
 
 async function crearPagina(pdf, tipoTasa) {
-  const tasa = TasaCatalogo.requerir(tipoTasa);
+  const tasa = await TasaCatalogo.requerirConConfig(tipoTasa);
   const principal = colorHex(tasa.tema.principal);
   const oscuro = colorHex(tasa.tema.oscuro);
   const suave = colorHex(tasa.tema.suave);
