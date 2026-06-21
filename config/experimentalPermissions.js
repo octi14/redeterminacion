@@ -56,11 +56,14 @@ const PERMISSIONS = {
 };
 
 const LEGACY_ROLE_PERMISSIONS = {
+  admin: [
+    "*",
+  ],
   master: [
-    PERMISSIONS.USERS_READ,
-    PERMISSIONS.USERS_MANAGE,
-    PERMISSIONS.ROLES_READ,
-    PERMISSIONS.ROLES_MANAGE,
+    "*",
+  ],
+  true: [
+    "*",
   ],
 };
 
