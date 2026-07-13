@@ -113,7 +113,7 @@ exports.reporte = async function (req, res) {
       `Archivo: ${importacion.nombreArchivo}`,
       `Fecha: ${importacion.createdAt.toISOString()}`,
       `Entradas: ${importacion.cantidadEntradas}`,
-      `${importacion.tipoTasa === "URBANA" ? "Partidas" : "Dominios"}: ${importacion.cantidadObjetos}`,
+      `Dominios: ${importacion.cantidadObjetos}`,
       `Períodos: ${importacion.periodos.join(", ")}`,
       `Errores: ${importacion.cantidadErrores}`,
       `Advertencias: ${importacion.cantidadAdvertencias}`,
@@ -154,6 +154,9 @@ exports.obtenerConfiguracion = async function (_req, res) {
 
 exports.actualizarConfiguracion = async function (req, res) {
   try {
+    if (typeof req.body.guardarArchivoOriginalTasas !== "boolean") {
+      return res.status(400).json({ message: "El estado de almacenamiento debe ser booleano." });
+    }
     const config = await TasaImportacionService.actualizarConfiguracionGuardarOriginal(
       req.body.guardarArchivoOriginalTasas,
       tipoTasa(req)

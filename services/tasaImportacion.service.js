@@ -711,7 +711,7 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
     await actualizarProgreso(importacion._id, "activando", insertadas, insertadas, "Activando períodos y reemplazando versiones anteriores.");
     await session.withTransaction(async () => {
       await TasaBoleta.updateMany(
-        { tipoTasa: importacion.tipoTasa, ...filtroPeriodos(importacion.periodos), activa: true, importacionId: { $ne: importacion._id } },
+        { tipoTasa: importacion.tipoTasa, activa: true, importacionId: { $ne: importacion._id } },
         { $set: { activa: false } },
         { session }
       );
@@ -994,7 +994,7 @@ async function actualizarConfiguracionGuardarOriginal(value, tipoTasa = "AUTOMOT
   return Config.findOneAndUpdate(
     { key: `guardarArchivoOriginalTasas:${tasa.codigo}` },
     {
-      value: Boolean(value),
+        value: value === true,
       description: `Permite almacenar en S3 el archivo original de importaciones de ${tasa.nombre}.`,
     },
     { new: true, upsert: true }

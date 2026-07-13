@@ -7,8 +7,15 @@ module.exports = async function requireMaster(req, res, next) {
     }
 
     const user = await User.findById(req.user.sub).select("username admin");
-    if (!user || user.admin !== "master") {
-      return res.status(403).json({ message: "Esta operación requiere permisos de administrador master." });
+    if (!user) {
+      return res.status(401).json({
+        message: "La sesión pertenece a un usuario que ya no existe en esta base. Volvé a iniciar sesión.",
+      });
+    }
+
+    const legacyRole = String(user.admin || "").trim().toLowerCase();
+    if (!["admin", "master", "true"].includes(legacyRole)) {
+      return res.status(403).json({ message: "Esta operación requiere permisos de administrador." });
     }
 
     req.authenticatedUser = user;

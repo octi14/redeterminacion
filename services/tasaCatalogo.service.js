@@ -13,20 +13,6 @@ const TASAS = [
       suave: "#e3f5ed",
     },
   },
-  {
-    codigo: "URBANA",
-    nombre: "Tasa Urbana",
-    descripcion: "Boletas asociadas a partidas inmobiliarias.",
-    identificador: "partida",
-    icono: "building",
-    formatos: ["urbana"],
-    importacionHabilitada: true,
-    tema: {
-      principal: "#bd3041",
-      oscuro: "#771a28",
-      suave: "#fbdde1",
-    },
-  },
 ];
 
 function listar() {
