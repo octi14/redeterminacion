@@ -6,6 +6,7 @@ const HabilitacionController = require("../controllers/habilitacion.controller")
 
 // endpoints
 router.get("/", HabilitacionController.getAll);
+router.post("/presign", HabilitacionController.presignDocumentos);
 router.post("/", HabilitacionController.add);
 router.put("/:id", HabilitacionController.update);
 router.put("/lazy/:id", HabilitacionController.updateLazy);

@@ -26,81 +26,128 @@ exports.getAll = async function (req, res) {
   }
 };
 
-//esta operación crea una instancia de Habilitacion y guarda sus documentos en un bucket de amazon s3.
-//anteriormente guardaba los archivos en un bucket de mongoDB atlas
+const BUCKET = 'haciendagesell';
+
+function extensionFromContentType(contentType) {
+  const raw = String(contentType || 'application/octet-stream').split(';')[0].trim();
+  const subtype = raw.split('/')[1] || 'bin';
+  return subtype.split('+')[0] || 'bin';
+}
+
+function publicObjectUrl(key) {
+  const region = process.env.AWS_REGION || 'us-east-1';
+  return `https://${BUCKET}.s3.${region}.amazonaws.com/${key}`;
+}
+
+/**
+ * Reserva nro de trámite y firma URLs PUT a S3.
+ * El navegador sube los binarios directo a S3 (no pasan por la RAM del dyno).
+ *
+ * CORS del bucket (requerido para el PUT desde el browser), ejemplo:
+ * AllowedOrigins: https://haciendavgesell.gob.ar
+ * AllowedMethods: PUT, GET, HEAD
+ * AllowedHeaders: Content-Type, *
+ */
+exports.presignDocumentos = async function (req, res) {
+  try {
+    const files = req.body.files;
+    if (!Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({
+        message: 'Se requiere files: [{ nombreDocumento, contentType }].',
+      });
+    }
+
+    const nroTramite = await TicketController.getCurrent();
+    if (nroTramite == null || typeof nroTramite === 'string') {
+      return res.status(500).json({
+        message: 'No se pudo reservar el número de trámite.',
+      });
+    }
+
+    const uploads = files.map((file) => {
+      const nombreDocumento = file.nombreDocumento;
+      const contentType = file.contentType || 'application/octet-stream';
+      if (!nombreDocumento) {
+        throw new Error('Cada archivo requiere nombreDocumento.');
+      }
+
+      const extension = extensionFromContentType(contentType);
+      const key = `mongo-backup/${nombreDocumento}_${nroTramite}.${extension}`;
+      const uploadUrl = s3.getSignedUrl('putObject', {
+        Bucket: BUCKET,
+        Key: key,
+        ContentType: contentType,
+        Expires: 15 * 60,
+      });
+
+      return {
+        nombreDocumento,
+        contentType,
+        key,
+        uploadUrl,
+        url: publicObjectUrl(key),
+      };
+    });
+
+    return res.status(200).json({
+      data: { nroTramite, uploads },
+    });
+  } catch (e) {
+    return res.status(400).json({
+      message: e.message,
+    });
+  }
+};
+
+// Crea la habilitación. Los archivos ya deben estar en S3 (flujo presign + PUT).
+// No acepta base64 en el body para evitar R14 por payloads enormes.
 exports.add = async function (req, res) {
   try {
-    const nroTramite = await TicketController.getCurrent();
-    const documentos = req.body.habilitacion.documentos || {};
-    const formData = req.body.habilitacion;
+    const formData = req.body.habilitacion || {};
+    const documentos = formData.documentos || {};
+    const nroTramite = formData.nroSolicitud;
+
+    if (nroTramite == null || nroTramite === '') {
+      return res.status(400).json({
+        message: 'Falta nroSolicitud. Primero solicite URLs de subida (POST /habilitaciones/presign).',
+      });
+    }
+
     formData.documentos = { documentos: [] };
 
-    const promises = [];
+    for (const campo of Object.keys(documentos)) {
+      const documento = documentos[campo];
+      if (!documento) continue;
 
-    const agregarDocumento = async (nombreDocumento, documento, nroTramite) => {
-      if (documento && documento.contenido) {
-        // Determinar la extensión basándonos en el ContentType
-        const contentType = documento.contenido.contentType; // Ejemplo: 'application/pdf'
-        const extension = contentType.split('/')[1]; // Ejemplo: 'pdf'
-
-        // Crear el nombre del archivo con la extensión
-        const nombreArchivo = `${nombreDocumento}_${nroTramite}.${extension}`;
-
-        // Convertir el archivo de base64 a buffer
-        const buffer = Buffer.from(documento.contenido.data, 'base64');
-
-        const params = {
-          Bucket: 'haciendagesell',
-          Key: `mongo-backup/${nombreArchivo}`, // Usar el nombre con la extensión
-          Body: buffer,
-          ContentType: contentType,
-          // No es necesario usar ContentType aquí, ya que no lo estamos configurando explícitamente
-        };
-
-        try {
-          const data = await s3.upload(params).promise();
-          const fileUrl = data.Location; // URL pública del archivo subido
-
-          formData.documentos.documentos.push({
-            nombreDocumento: nombreDocumento,
-            url: fileUrl,
-          });
-        } catch (error) {
-          console.error('Error subiendo archivo a S3:', error.message);
-          if (!res.headersSent) {
-            return res.status(500).json({
-              message: 'Error subiendo el archivo a S3.',
-            });
-          }
-        }
+      if (documento.contenido && documento.contenido.data) {
+        return res.status(400).json({
+          message: 'El alta con archivos en base64 ya no está soportada. Use la subida directa a S3.',
+        });
       }
-    };
 
-    // Procesar todos los documentos
-    for (const nombreDocumento in documentos) {
-      if (documentos.hasOwnProperty(nombreDocumento)) {
-        const documento = documentos[nombreDocumento];
-        promises.push(agregarDocumento(documento.nombreDocumento, documento, nroTramite));
+      if (!documento.url) {
+        return res.status(400).json({
+          message: `Falta url de S3 para el documento ${documento.nombreDocumento || campo}.`,
+        });
       }
+
+      formData.documentos.documentos.push({
+        nombreDocumento: documento.nombreDocumento || campo,
+        url: documento.url,
+      });
     }
-
-    await Promise.all(promises);
 
     formData.nroSolicitud = nroTramite;
-    const createdHabilitacion = await HabilitacionService.create(formData);
+    await HabilitacionService.create(formData);
 
-    if (!res.headersSent) {
-      return res.status(201).json({
-        message: 'Habilitación creada con éxito.',
-        data: nroTramite,
-      });
-    }
+    return res.status(201).json({
+      message: 'Habilitación creada con éxito.',
+      data: nroTramite,
+    });
   } catch (e) {
-    if (!res.headersSent) {
-      return res.status(400).json({
-        message: e.message,
-      });
-    }
+    return res.status(400).json({
+      message: e.message,
+    });
   }
 };
 
