@@ -145,8 +145,11 @@ exports.archivoOriginal = async function (req, res) {
 
 exports.obtenerConfiguracion = async function (_req, res) {
   try {
-    const enabled = await TasaImportacionService.guardarOriginalHabilitado(tipoTasa(_req));
-    return res.status(200).json({ data: { guardarArchivoOriginalTasas: enabled } });
+    const [guardarArchivoOriginalTasas, tasaAutomotorPublicaHabilitada] = await Promise.all([
+      TasaImportacionService.guardarOriginalHabilitado(tipoTasa(_req)),
+      TasaImportacionService.tasaAutomotorPublicaHabilitada(),
+    ]);
+    return res.status(200).json({ data: { guardarArchivoOriginalTasas, tasaAutomotorPublicaHabilitada } });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -154,14 +157,28 @@ exports.obtenerConfiguracion = async function (_req, res) {
 
 exports.actualizarConfiguracion = async function (req, res) {
   try {
-    if (typeof req.body.guardarArchivoOriginalTasas !== "boolean") {
-      return res.status(400).json({ message: "El estado de almacenamiento debe ser booleano." });
+    const updates = {};
+    if (Object.prototype.hasOwnProperty.call(req.body, "guardarArchivoOriginalTasas")) {
+      if (typeof req.body.guardarArchivoOriginalTasas !== "boolean") {
+        return res.status(400).json({ message: "El estado de almacenamiento debe ser booleano." });
+      }
+      updates.guardarArchivoOriginalTasas = await TasaImportacionService.actualizarConfiguracionGuardarOriginal(
+        req.body.guardarArchivoOriginalTasas,
+        tipoTasa(req)
+      );
     }
-    const config = await TasaImportacionService.actualizarConfiguracionGuardarOriginal(
-      req.body.guardarArchivoOriginalTasas,
-      tipoTasa(req)
-    );
-    return res.status(200).json({ data: config });
+    if (Object.prototype.hasOwnProperty.call(req.body, "tasaAutomotorPublicaHabilitada")) {
+      if (typeof req.body.tasaAutomotorPublicaHabilitada !== "boolean") {
+        return res.status(400).json({ message: "El estado de visibilidad debe ser booleano." });
+      }
+      updates.tasaAutomotorPublicaHabilitada = await TasaImportacionService.actualizarConfiguracionTasaAutomotorPublica(
+        req.body.tasaAutomotorPublicaHabilitada
+      );
+    }
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ message: "No se envio ninguna configuracion valida." });
+    }
+    return res.status(200).json({ data: updates });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

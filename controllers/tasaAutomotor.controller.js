@@ -1,8 +1,11 @@
 const TasaBoleta = require("../models/tasaBoleta.model");
 const TasaAutomotorPdf = require("../services/tasaAutomotorPdf.service");
 const TasaBoletaDatos = require("../services/tasaBoletaDatos.service");
+const TasaImportacionService = require("../services/tasaImportacion.service");
+const User = require("../models/user.model");
 
 const MAX_PERIODOS_POR_DESCARGA = 20;
+const PRIVILEGED_ROLES = ["admin", "master", "true", "boletas"];
 
 function normalizarDominio(value) {
   return String(value || "").replace(/[\s-]/g, "").toUpperCase();
@@ -24,8 +27,32 @@ function filtroPeriodos(periodos) {
   }) };
 }
 
+async function usuarioPrivilegiado(req) {
+  if (!req.user || !req.user.sub) return false;
+  const user = await User.findById(req.user.sub).select("admin").lean();
+  const role = String(user && user.admin || "").trim().toLowerCase();
+  return PRIVILEGED_ROLES.includes(role);
+}
+
+async function puedeConsultarModulo(req) {
+  if (await usuarioPrivilegiado(req)) return true;
+  return TasaImportacionService.tasaAutomotorPublicaHabilitada();
+}
+
+exports.configuracion = async function configuracion(_req, res) {
+  try {
+    const habilitada = await TasaImportacionService.tasaAutomotorPublicaHabilitada();
+    return res.status(200).json({ data: { habilitada } });
+  } catch (error) {
+    return res.status(500).json({ message: "No se pudo consultar la configuracion de automotores." });
+  }
+};
+
 exports.buscar = async function buscar(req, res) {
   try {
+    if (!(await puedeConsultarModulo(req))) {
+      return res.status(403).json({ message: "La descarga de tasa automotor no se encuentra disponible." });
+    }
     const dominio = validarDominio(req, res);
     if (!dominio) return;
     const boletas = await TasaBoleta.find({
@@ -64,6 +91,9 @@ exports.buscar = async function buscar(req, res) {
 
 exports.descargar = async function descargar(req, res) {
   try {
+    if (!(await puedeConsultarModulo(req))) {
+      return res.status(403).json({ message: "La descarga de tasa automotor no se encuentra disponible." });
+    }
     const dominio = validarDominio(req, res);
     if (!dominio) return;
     const periodos = Array.isArray(req.body.periodos) ? [...new Set(req.body.periodos)] : [];

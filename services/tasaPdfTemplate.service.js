@@ -1,8 +1,11 @@
+const fs = require("fs");
+const path = require("path");
 const { rgb, StandardFonts } = require("pdf-lib");
 const TasaCatalogo = require("./tasaCatalogo.service");
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 1008;
+const AUTOMOTOR_BG_PATH = path.join(__dirname, "..", "assets", "tasa-automotor-bg-2026.jpg");
 
 function colorHex(hex) {
   const value = String(hex || "#13875e").replace("#", "");
@@ -19,11 +22,18 @@ function linea(page, x1, y1, x2, y2, color, thickness = 0.7) {
 
 async function crearPagina(pdf, tipoTasa) {
   const tasa = TasaCatalogo.requerir(tipoTasa);
+  const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+
+  if (tasa.codigo === "AUTOMOTORES" && fs.existsSync(AUTOMOTOR_BG_PATH)) {
+    const background = await pdf.embedJpg(fs.readFileSync(AUTOMOTOR_BG_PATH));
+    page.drawImage(background, { x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT });
+    return page;
+  }
+
   const principal = colorHex(tasa.tema.principal);
   const oscuro = colorHex(tasa.tema.oscuro);
   const suave = colorHex(tasa.tema.suave);
   const gris = rgb(0.72, 0.76, 0.74);
-  const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT, color: rgb(1, 1, 1) });

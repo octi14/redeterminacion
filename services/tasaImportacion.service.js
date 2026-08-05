@@ -466,6 +466,11 @@ async function guardarOriginalHabilitado(tipoTasa = "AUTOMOTORES") {
   return Boolean(config && config.value === true);
 }
 
+async function tasaAutomotorPublicaHabilitada() {
+  const config = await Config.findOne({ key: "boletaTasaAutomotorPublica" });
+  return !config || config.value !== false;
+}
+
 async function subirOriginalArchivo(filePath, importacion, fileName) {
   const s3 = new AWS.S3({
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -1001,6 +1006,17 @@ async function actualizarConfiguracionGuardarOriginal(value, tipoTasa = "AUTOMOT
   );
 }
 
+async function actualizarConfiguracionTasaAutomotorPublica(value) {
+  return Config.findOneAndUpdate(
+    { key: "boletaTasaAutomotorPublica" },
+    {
+      value: value === true,
+      description: "Habilita la visibilidad publica de la descarga de tasa automotor.",
+    },
+    { new: true, upsert: true }
+  );
+}
+
 module.exports = {
   analizarBuffer,
   analizarArchivo,
@@ -1013,4 +1029,6 @@ module.exports = {
   deshabilitarImportacion,
   guardarOriginalHabilitado,
   actualizarConfiguracionGuardarOriginal,
+  tasaAutomotorPublicaHabilitada,
+  actualizarConfiguracionTasaAutomotorPublica,
 };
