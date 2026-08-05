@@ -36,9 +36,56 @@ exports.create = async function (formData) {
 };
 
 exports.update = async function (id, update) {
-  return AbiertoAnual.findOneAndUpdate({ _id: id }, update, {
-    new: true,
+  if (!update?.facturas || !Array.isArray(update.facturas)) {
+    return AbiertoAnual.findOneAndUpdate({ _id: id }, update, {
+      new: true,
+    });
+  }
+
+  const existing = await AbiertoAnual.findById(id);
+  if (!existing) return null;
+
+  const mergedFacturas = update.facturas.map((factura, index) => {
+    const prev = existing.facturas[index] ?? null;
+
+    if (factura == null) {
+      return prev;
+    }
+
+    if (!prev) {
+      const nueva = {
+        observaciones: factura.observaciones ?? '',
+        rectificando: !!factura.rectificando,
+      };
+      if (factura.url) nueva.url = factura.url;
+      return nueva;
+    }
+
+    const merged = {
+      observaciones:
+        factura.observaciones !== undefined
+          ? factura.observaciones
+          : prev.observaciones ?? '',
+      rectificando:
+        factura.rectificando !== undefined
+          ? factura.rectificando
+          : !!prev.rectificando,
+    };
+
+    if (factura.url) {
+      merged.url = factura.url;
+    } else if (prev.url) {
+      merged.url = prev.url;
+    }
+
+    return merged;
   });
+
+  return AbiertoAnual.findOneAndUpdate(
+    { _id: id },
+    { ...update, facturas: mergedFacturas },
+    { new: true }
+  );
 };
 
 exports.updateLazy = async function (id, update) {

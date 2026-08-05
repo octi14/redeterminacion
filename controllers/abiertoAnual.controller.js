@@ -225,7 +225,7 @@ exports.update = async (req, res) => {
     return res.status(200).json(documentoActualizado);
   } catch (error) {
     return res.status(400).json({
-      message: e.message,
+      message: error.message,
     });
   }
 };
