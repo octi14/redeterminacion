@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const PagoDobleController = require("../controllers/pagoDoble.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 
 // endpoints
 router.get("/", RbacService.requirePermission("pagosDobles.read"), PagoDobleController.getAll);

@@ -32,7 +32,7 @@ const TasaImportacionRoute = require('../routes/tasaImportacion.route');
 const TasaAutomotorRoute = require('../routes/tasaAutomotor.route');
 const TasaUrbanaRoute = require('../routes/tasaUrbana.route');
 const TasaCatalogoRoute = require('../routes/tasaCatalogo.route');
-const ExperimentalRbacRoute = require('../routes/experimentalRbac.route');
+const RbacRoute = require('../routes/rbac.route');
 
 
 
@@ -94,7 +94,7 @@ app.use("/tasas/importaciones", TasaImportacionRoute);
 app.use("/tasas/tipos", TasaCatalogoRoute);
 app.use("/tasas/automotores", TasaAutomotorRoute);
 app.use("/tasas/urbanas", TasaUrbanaRoute);
-app.use("/experimental-rbac", ExperimentalRbacRoute);
+app.use("/rbac", RbacRoute);
 app.use("/user-activities", userActivityRoute);
 app.use('/cementerio/certificadosDefuncion', CertificadoDefuncionRoute);
 app.use('/cementerio/periodos', PeriodoCementerioRoute);

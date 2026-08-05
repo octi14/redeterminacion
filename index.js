@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const config = require("./config.js");
 const app = require("./app");
 const { loadConfigs, getCachedConfig } = require("./services/configs.service");
+const RbacService = require("./services/rbac.service");
 
 mongoose.set("strictQuery", true);
 
@@ -16,6 +17,9 @@ async function startServer() {
 
     console.log("Successfully Established Connection with MongoDB");
     console.log("MongoDB host:", mongoHost || "(no detectado)");
+
+    await RbacService.migrateLegacyCollections();
+    console.log("Colecciones de roles verificadas.");
 
     await loadConfigs();
     console.log("Configuraciones globales cargadas.");

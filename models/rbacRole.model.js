@@ -1,6 +1,6 @@
 const { Schema, model } = require("mongoose");
 
-const experimentalRoleSchema = new Schema(
+const rbacRoleSchema = new Schema(
   {
     key: {
       type: String,
@@ -29,9 +29,9 @@ const experimentalRoleSchema = new Schema(
     },
   },
   {
-    collection: "experimental_roles",
+    collection: "roles",
     timestamps: true,
   }
 );
 
-module.exports = model("ExperimentalRole", experimentalRoleSchema);
+module.exports = model("RbacRole", rbacRoleSchema);

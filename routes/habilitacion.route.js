@@ -3,7 +3,7 @@ const router = express.Router();
 // const paginationMiddleware = require("express-pagination-middleware");
 
 const HabilitacionController = require("../controllers/habilitacion.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 
 // endpoints
 router.get("/", RbacService.requirePermission("habilitaciones.read"), HabilitacionController.getAll);

@@ -1,7 +1,49 @@
 const User = require("../models/user.model");
-const ExperimentalRole = require("../models/experimentalRole.model");
-const ExperimentalUserRole = require("../models/experimentalUserRole.model");
-const { LEGACY_ROLE_PERMISSIONS } = require("../config/experimentalPermissions");
+const RbacRole = require("../models/rbacRole.model");
+const UserRole = require("../models/userRole.model");
+const { LEGACY_ROLE_PERMISSIONS } = require("../config/permissions");
+
+const LEGACY_COLLECTIONS = {
+  roles: "experimental_roles",
+  userRoles: "experimental_user_roles",
+};
+
+async function collectionExists(name) {
+  const collections = await RbacRole.db.db.listCollections({ name }, { nameOnly: true }).toArray();
+  return collections.length > 0;
+}
+
+/**
+ * Copia una sola vez los datos de las colecciones anteriores a las definitivas.
+ * Es idempotente y conserva las colecciones de origen como respaldo.
+ */
+exports.migrateLegacyCollections = async function () {
+  if (await collectionExists(LEGACY_COLLECTIONS.roles)) {
+    const roles = await RbacRole.db.db.collection(LEGACY_COLLECTIONS.roles).find({}).toArray();
+    if (roles.length) {
+      await RbacRole.bulkWrite(roles.map(({ _id, updatedAt, ...role }) => ({
+        updateOne: {
+          filter: { key: role.key },
+          update: { $setOnInsert: role },
+          upsert: true,
+        },
+      })));
+    }
+  }
+
+  if (await collectionExists(LEGACY_COLLECTIONS.userRoles)) {
+    const assignments = await UserRole.db.db.collection(LEGACY_COLLECTIONS.userRoles).find({}).toArray();
+    if (assignments.length) {
+      await UserRole.bulkWrite(assignments.map(({ _id, updatedAt, ...assignment }) => ({
+        updateOne: {
+          filter: { userId: assignment.userId, roleKey: assignment.roleKey },
+          update: { $setOnInsert: assignment },
+          upsert: true,
+        },
+      })));
+    }
+  }
+};
 
 function unique(values) {
   return Array.from(new Set(values.filter(Boolean)));
@@ -24,28 +66,28 @@ exports.resolveForUser = async function (user) {
     };
   }
 
-  const assignments = await ExperimentalUserRole
+  const assignments = await UserRole
     .find({ userId: user._id, active: true })
     .lean();
   const roleKeys = assignments.map((assignment) => assignment.roleKey);
-  const experimentalRoles = roleKeys.length
-    ? await ExperimentalRole.find({ key: { $in: roleKeys }, active: true }).lean()
+  const assignedRoles = roleKeys.length
+    ? await RbacRole.find({ key: { $in: roleKeys }, active: true }).lean()
     : [];
 
-  const experimentalPermissions = experimentalRoles.flatMap((role) => role.permissions || []);
+  const permissions = assignedRoles.flatMap((role) => role.permissions || []);
   const legacyPermissions = legacyPermissionsFor(user.admin);
 
   return {
-    roles: experimentalRoles.map((role) => ({
+    roles: assignedRoles.map((role) => ({
       key: role.key,
       name: role.name,
       description: role.description,
       permissions: role.permissions,
     })),
-    roleKeys: experimentalRoles.map((role) => role.key),
-    permissions: unique([...legacyPermissions, ...experimentalPermissions]),
+    roleKeys: assignedRoles.map((role) => role.key),
+    permissions: unique([...legacyPermissions, ...permissions]),
     legacyAdmin: user.admin,
-    source: experimentalRoles.length ? "experimental+legacy" : "legacy",
+    source: assignedRoles.length ? "rbac+legacy" : "legacy",
   };
 };
 
@@ -113,7 +155,7 @@ exports.requireAnyPermission = function (permissions) {
 exports.can = can;
 
 exports.listRoles = async function () {
-  return ExperimentalRole.find().sort({ key: 1 }).lean();
+  return RbacRole.find().sort({ key: 1 }).lean();
 };
 
 exports.listUsersWithAccess = async function () {
@@ -124,7 +166,7 @@ exports.listUsersWithAccess = async function () {
       id: user._id,
       username: user.username,
       admin: user.admin,
-      rolesExp: access.roles,
+      roles: access.roles,
       permissions: access.permissions,
       accessSource: access.source,
       funerariaId: user.funerariaId,
@@ -133,7 +175,7 @@ exports.listUsersWithAccess = async function () {
 };
 
 exports.upsertRole = async function ({ key, name, description = "", permissions = [], active = true }) {
-  return ExperimentalRole.findOneAndUpdate(
+  return RbacRole.findOneAndUpdate(
     { key: String(key).trim().toLowerCase() },
     {
       key: String(key).trim().toLowerCase(),
@@ -148,14 +190,14 @@ exports.upsertRole = async function ({ key, name, description = "", permissions 
 
 exports.assignRole = async function ({ userId, roleKey, assignedBy }) {
   const key = String(roleKey).trim().toLowerCase();
-  const role = await ExperimentalRole.findOne({ key, active: true });
+  const role = await RbacRole.findOne({ key, active: true });
   if (!role) {
-    const error = new Error("El rol experimental no existe o no esta activo.");
+    const error = new Error("El rol no existe o no esta activo.");
     error.status = 404;
     throw error;
   }
 
-  return ExperimentalUserRole.findOneAndUpdate(
+  return UserRole.findOneAndUpdate(
     { userId, roleKey: key },
     {
       userId,
@@ -168,7 +210,7 @@ exports.assignRole = async function ({ userId, roleKey, assignedBy }) {
 };
 
 exports.removeRole = async function ({ userId, roleKey }) {
-  return ExperimentalUserRole.findOneAndUpdate(
+  return UserRole.findOneAndUpdate(
     { userId, roleKey: String(roleKey).trim().toLowerCase() },
     { active: false },
     { new: true }

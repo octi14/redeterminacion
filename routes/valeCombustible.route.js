@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const ValeCombustibleController = require("../controllers/valeCombustible.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 
 router.get("/", RbacService.requirePermission("compras.vales.read"), ValeCombustibleController.getAll);
 router.post("/", RbacService.requirePermission("compras.vales.update"), ValeCombustibleController.add);

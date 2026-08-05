@@ -1,13 +1,13 @@
 const express = require("express");
 const router = express.Router();
 
-const Controller = require("../controllers/experimentalRbac.controller");
-const ExperimentalRbacService = require("../services/experimentalRbac.service");
+const Controller = require("../controllers/rbac.controller");
+const RbacService = require("../services/rbac.service");
 
-const requireReadUsers = ExperimentalRbacService.requireAnyPermission(["users.read", "users.manage"]);
-const requireManageUsers = ExperimentalRbacService.requirePermission("users.manage");
-const requireReadRoles = ExperimentalRbacService.requireAnyPermission(["roles.read", "roles.manage"]);
-const requireManageRoles = ExperimentalRbacService.requirePermission("roles.manage");
+const requireReadUsers = RbacService.requireAnyPermission(["users.read", "users.manage"]);
+const requireManageUsers = RbacService.requirePermission("users.manage");
+const requireReadRoles = RbacService.requireAnyPermission(["roles.read", "roles.manage"]);
+const requireManageRoles = RbacService.requirePermission("roles.manage");
 
 router.get("/users", requireReadUsers, Controller.listUsers);
 router.get("/permissions", requireReadRoles, Controller.listPermissions);

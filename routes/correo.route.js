@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const correoController = require('../controllers/correo.controller');
-const RbacService = require('../services/experimentalRbac.service');
+const RbacService = require('../services/rbac.service');
 
 // Ruta para enviar un correo de prueba
 router.post('/mailer', correoController.enviarCorreo);

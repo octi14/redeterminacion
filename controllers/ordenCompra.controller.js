@@ -1,6 +1,6 @@
 let OrdenCompraService = require("../services/ordenCompra.service");
 let ValeCombustibleService = require("../services/valeCombustible.service");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 
 async function requirePermission(req, permission) {
   const context = await RbacService.getCurrentUserContext(req);

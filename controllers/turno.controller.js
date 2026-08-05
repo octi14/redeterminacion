@@ -1,5 +1,5 @@
 let TurnoService = require("../services/turno.service");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 
 async function requireTurnoUpdatePermission(req) {
   const context = await RbacService.getCurrentUserContext(req);

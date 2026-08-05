@@ -3,7 +3,7 @@ const router = express.Router();
 // const paginationMiddleware = require("express-pagination-middleware");
 
 const ObraController = require("../controllers/obra.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 // const {
 //   userValidationMiddleware: UserValidator,
 // } = require("../validators/middleware");

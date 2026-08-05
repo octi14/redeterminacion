@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const config = require("../config");
-const ExperimentalRbacService = require("./experimentalRbac.service");
+const RbacService = require("./rbac.service");
 let User = require("../models/user.model");
 
 exports.getAll = async function () {
@@ -23,11 +23,11 @@ exports.authenticate = async function ({ username, password }) {
     const responseUser = user.toJSON();
     delete responseUser.password;
 
-    const access = await ExperimentalRbacService.resolveForUser(user);
+    const access = await RbacService.resolveForUser(user);
 
     return {
       ...responseUser,
-      rolesExp: access.roles,
+      roles: access.roles,
       permissions: access.permissions,
       accessSource: access.source,
       token,
@@ -65,13 +65,13 @@ exports.getById = async function (id) {
 };
 
 exports.getMe = async function (req) {
-  const { user, access } = await ExperimentalRbacService.getCurrentUserContext(req);
+  const { user, access } = await RbacService.getCurrentUserContext(req);
   const responseUser = user.toJSON();
   delete responseUser.password;
 
   return {
     ...responseUser,
-    rolesExp: access.roles,
+    roles: access.roles,
     permissions: access.permissions,
     accessSource: access.source,
   };

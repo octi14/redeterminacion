@@ -211,6 +211,8 @@ exports.getAbiertoAnualPeriodosForFront = async () => {
   return {
     minDates,
     maxDates,
+    rectificacionMinDate: `${raw.rectificacion.min}/${year}`,
+    rectificacionMaxDate: `${raw.rectificacion.max}/${year}`,
     rectificacion,
     rectificacionGlobal: raw.rectificacionGlobal,
     rectificacionPorFecha,

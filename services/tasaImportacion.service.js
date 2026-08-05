@@ -411,11 +411,14 @@ function periodoPartes(periodo) {
   return { anio, cuota };
 }
 
-async function periodosActivosDeTasa(tipoTasa) {
+function filtroPeriodos(periodos) {
+  return { $or: periodos.map(periodoPartes) };
+}
+
+async function periodosActivosExistentes(tipoTasa, periodos) {
   const rows = await TasaBoleta.aggregate([
-    { $match: { tipoTasa, activa: true } },
+    { $match: { tipoTasa, activa: true, ...filtroPeriodos(periodos) } },
     { $group: { _id: { anio: "$anio", cuota: "$cuota" } } },
-    { $sort: { "_id.anio": 1, "_id.cuota": 1 } },
   ]);
   return rows.map((row) => `${String(row._id.cuota).padStart(2, "0")}/${row._id.anio}`);
 }
@@ -455,7 +458,6 @@ function claveNombreArchivo(fileName) {
 }
 
 async function guardarOriginalHabilitado(tipoTasa = "AUTOMOTORES") {
-  if (!(await gestorBoletasUploadHabilitado())) return false;
   const key = `guardarArchivoOriginalTasas:${tipoTasa}`;
   let config = await Config.findOne({ key });
   if (!config && tipoTasa === "AUTOMOTORES") {
@@ -464,10 +466,16 @@ async function guardarOriginalHabilitado(tipoTasa = "AUTOMOTORES") {
   return Boolean(config && config.value === true);
 }
 
-async function gestorBoletasUploadHabilitado() {
-  const config = await Config.findOne({ key: "boletaTasasUploadEnabled" }).lean();
+async function tasaPublicaHabilitada(tipoTasa = "AUTOMOTORES") {
+  const tasa = TasaCatalogo.requerir(tipoTasa);
+  const key = tasa.codigo === "AUTOMOTORES"
+    ? "boletaTasaAutomotorPublica"
+    : `boletaTasaPublica:${tasa.codigo}`;
+  const config = await Config.findOne({ key });
   return !config || config.value !== false;
 }
+
+const tasaAutomotorPublicaHabilitada = () => tasaPublicaHabilitada("AUTOMOTORES");
 
 async function subirOriginalArchivo(filePath, importacion, fileName) {
   const s3 = new AWS.S3({
@@ -563,10 +571,7 @@ async function ejecutarAnalisisArchivo({ importacionId, filePath, tipoTasa }) {
 }
 
 async function iniciarAnalisis({ filePath, fileHash, fileSize, fileName, tipoTasa = "AUTOMOTORES", user }) {
-  if (!user || !user._id) {
-    throw Object.assign(new Error("Usuario autenticado requerido para importar boletas."), { status: 401 });
-  }
-  await TasaCatalogo.requerirImportable(tipoTasa);
+  TasaCatalogo.requerir(tipoTasa, { importable: true });
   for (let intento = 0; intento < 10; intento += 1) {
     const nombreArchivo = await nombreArchivoDisponible(fileName, tipoTasa);
     try {
@@ -714,7 +719,7 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
       throw new Error(`Se esperaban ${importacion.cantidadEntradas} boletas, pero se prepararon ${insertadas}.`);
     }
 
-    await actualizarProgreso(importacion._id, "activando", insertadas, insertadas, "Activando períodos nuevos y deshabilitando cargas anteriores.");
+    await actualizarProgreso(importacion._id, "activando", insertadas, insertadas, "Activando períodos y reemplazando versiones anteriores.");
     await session.withTransaction(async () => {
       await TasaBoleta.updateMany(
         { tipoTasa: importacion.tipoTasa, activa: true, importacionId: { $ne: importacion._id } },
@@ -727,11 +732,11 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
         _id: { $ne: importacion._id },
         tipoTasa: importacion.tipoTasa,
         estado: { $in: ["publicada", "reemplazada_parcialmente"] },
-        periodosActivos: { $exists: true, $ne: [] },
+        periodosActivos: { $in: importacion.periodos },
       }).session(session);
       for (const anterior of anteriores) {
-        anterior.periodosActivos = [];
-        anterior.estado = "reemplazada";
+        anterior.periodosActivos = anterior.periodosActivos.filter((periodo) => !importacion.periodos.includes(periodo));
+        anterior.estado = anterior.periodosActivos.length ? "reemplazada_parcialmente" : "reemplazada";
         await anterior.save({ session });
       }
 
@@ -785,15 +790,11 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
 }
 
 async function iniciarPublicacion({ importacionId, filePath, fileHash, confirmarReemplazo, confirmarPeriodosFuturos, guardarOriginal, user }) {
-  if (!user || !user._id) {
-    throw Object.assign(new Error("Usuario autenticado requerido para publicar boletas."), { status: 401 });
-  }
   const importacion = await TasaImportacion.findById(importacionId);
   if (!importacion) throw Object.assign(new Error("Intento de importación no encontrado."), { status: 404 });
   if (!["analizada", "fallida"].includes(importacion.estado)) {
     throw Object.assign(new Error("La importación ya no puede publicarse."), { status: 409 });
   }
-  await TasaCatalogo.requerirImportable(importacion.tipoTasa);
   if (fileHash !== importacion.hashArchivo) {
     throw Object.assign(new Error("El archivo no coincide con el archivo analizado."), { status: 409 });
   }
@@ -803,9 +804,9 @@ async function iniciarPublicacion({ importacionId, filePath, fileHash, confirmar
   if (periodosFuturos.length && !confirmarPeriodosFuturos) {
     throw Object.assign(new Error(`La carga contiene períodos posteriores al año actual (${anioActual}). Confirmá expresamente para continuar.`), { status: 409, periodosFuturos });
   }
-  const conflictos = await periodosActivosDeTasa(importacion.tipoTasa);
+  const conflictos = await periodosActivosExistentes(importacion.tipoTasa, importacion.periodos);
   if (conflictos.length && !confirmarReemplazo) {
-    throw Object.assign(new Error("Existen períodos publicados que serán deshabilitados al publicar esta carga."), { status: 409, conflictos });
+    throw Object.assign(new Error("Existen períodos publicados que serán reemplazados."), { status: 409, conflictos });
   }
 
   importacion.estado = "publicando";
@@ -1004,12 +1005,29 @@ async function actualizarConfiguracionGuardarOriginal(value, tipoTasa = "AUTOMOT
   return Config.findOneAndUpdate(
     { key: `guardarArchivoOriginalTasas:${tasa.codigo}` },
     {
-      value: Boolean(value),
+        value: value === true,
       description: `Permite almacenar en S3 el archivo original de importaciones de ${tasa.nombre}.`,
     },
     { new: true, upsert: true }
   );
 }
+
+async function actualizarConfiguracionTasaPublica(value, tipoTasa = "AUTOMOTORES") {
+  const tasa = TasaCatalogo.requerir(tipoTasa);
+  const key = tasa.codigo === "AUTOMOTORES"
+    ? "boletaTasaAutomotorPublica"
+    : `boletaTasaPublica:${tasa.codigo}`;
+  return Config.findOneAndUpdate(
+    { key },
+    {
+      value: value === true,
+      description: `Habilita la visibilidad publica de la descarga de ${tasa.nombre}.`,
+    },
+    { new: true, upsert: true }
+  );
+}
+
+const actualizarConfiguracionTasaAutomotorPublica = (value) => actualizarConfiguracionTasaPublica(value, "AUTOMOTORES");
 
 module.exports = {
   analizarBuffer,
@@ -1022,6 +1040,9 @@ module.exports = {
   cambiarEstadoPeriodo,
   deshabilitarImportacion,
   guardarOriginalHabilitado,
-  gestorBoletasUploadHabilitado,
   actualizarConfiguracionGuardarOriginal,
+  tasaPublicaHabilitada,
+  actualizarConfiguracionTasaPublica,
+  tasaAutomotorPublicaHabilitada,
+  actualizarConfiguracionTasaAutomotorPublica,
 };

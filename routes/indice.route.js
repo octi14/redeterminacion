@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const IndiceController = require("../controllers/indice.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 // const IndiceValidator = require("../validators/indice.validator");
 
 // "/items" endpoints

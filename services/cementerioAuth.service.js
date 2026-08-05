@@ -1,5 +1,5 @@
 const User = require('../models/user.model');
-const RbacService = require('./experimentalRbac.service');
+const RbacService = require('./rbac.service');
 
 exports.getUser = async function (req) {
   const userId = req.user && req.user.sub;

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const VehiculoController = require("../controllers/vehiculo.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 
 router.get("/", RbacService.requirePermission("compras.vehiculos.manage"), VehiculoController.getAll);
 router.post("/", RbacService.requirePermission("compras.vehiculos.manage"), VehiculoController.add);

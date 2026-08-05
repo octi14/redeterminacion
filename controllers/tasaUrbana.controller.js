@@ -2,8 +2,33 @@ const TasaBoleta = require("../models/tasaBoleta.model");
 const TasaUrbanaPdf = require("../services/tasaUrbanaPdf.service");
 const TasaBoletaDatos = require("../services/tasaBoletaDatos.service");
 const TasaCatalogo = require("../services/tasaCatalogo.service");
+const TasaImportacionService = require("../services/tasaImportacion.service");
+const RbacService = require("../services/rbac.service");
+const User = require("../models/user.model");
 
 const MAX_PERIODOS_POR_DESCARGA = 20;
+
+async function usuarioPrivilegiado(req) {
+  if (!req.user || !req.user.sub) return false;
+  const user = await User.findById(req.user.sub).select("admin");
+  if (!user) return false;
+  const access = await RbacService.resolveForUser(user);
+  return access.permissions.includes("*") || access.permissions.includes("boletas.manage");
+}
+
+async function puedeConsultarModulo(req) {
+  if (await usuarioPrivilegiado(req)) return true;
+  return TasaImportacionService.tasaPublicaHabilitada("URBANA");
+}
+
+exports.configuracion = async function configuracion(_req, res) {
+  try {
+    const habilitada = await TasaImportacionService.tasaPublicaHabilitada("URBANA");
+    return res.status(200).json({ data: { habilitada } });
+  } catch (error) {
+    return res.status(500).json({ message: "No se pudo consultar la configuracion de tasa urbana." });
+  }
+};
 
 function validarPartida(req, res) {
   const partidaIngresada = String(req.params.partida || "").replace(/\s/g, "").toUpperCase();
@@ -24,7 +49,10 @@ function filtroPeriodos(periodos) {
 
 exports.buscar = async function buscar(req, res) {
   try {
-    await TasaCatalogo.requerirImportable("URBANA");
+    TasaCatalogo.requerir("URBANA");
+    if (!(await puedeConsultarModulo(req))) {
+      return res.status(403).json({ message: "La descarga de tasa urbana no se encuentra disponible." });
+    }
     const partida = validarPartida(req, res);
     if (!partida) return;
     const boletas = await TasaBoleta.find({ tipoTasa: "URBANA", objetoClave: partida, activa: true })
@@ -59,7 +87,10 @@ exports.buscar = async function buscar(req, res) {
 
 exports.descargar = async function descargar(req, res) {
   try {
-    await TasaCatalogo.requerirImportable("URBANA");
+    TasaCatalogo.requerir("URBANA");
+    if (!(await puedeConsultarModulo(req))) {
+      return res.status(403).json({ message: "La descarga de tasa urbana no se encuentra disponible." });
+    }
     const partida = validarPartida(req, res);
     if (!partida) return;
     const periodos = Array.isArray(req.body.periodos) ? [...new Set(req.body.periodos)] : [];

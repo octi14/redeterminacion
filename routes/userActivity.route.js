@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const UserActivityController = require('../controllers/userActivity.controller');
-const RbacService = require('../services/experimentalRbac.service');
+const RbacService = require('../services/rbac.service');
 
 // Ruta para crear una nueva actividad de usuario
 router.post('/user-activity', UserActivityController.createUserActivity);

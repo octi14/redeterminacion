@@ -1,7 +1,9 @@
 const TasaBoleta = require("../models/tasaBoleta.model");
 const TasaAutomotorPdf = require("../services/tasaAutomotorPdf.service");
 const TasaBoletaDatos = require("../services/tasaBoletaDatos.service");
-const TasaCatalogo = require("../services/tasaCatalogo.service");
+const TasaImportacionService = require("../services/tasaImportacion.service");
+const RbacService = require("../services/rbac.service");
+const User = require("../models/user.model");
 
 const MAX_PERIODOS_POR_DESCARGA = 20;
 
@@ -25,9 +27,33 @@ function filtroPeriodos(periodos) {
   }) };
 }
 
+async function usuarioPrivilegiado(req) {
+  if (!req.user || !req.user.sub) return false;
+  const user = await User.findById(req.user.sub).select("admin");
+  if (!user) return false;
+  const access = await RbacService.resolveForUser(user);
+  return access.permissions.includes("*") || access.permissions.includes("boletas.manage");
+}
+
+async function puedeConsultarModulo(req) {
+  if (await usuarioPrivilegiado(req)) return true;
+  return TasaImportacionService.tasaAutomotorPublicaHabilitada();
+}
+
+exports.configuracion = async function configuracion(_req, res) {
+  try {
+    const habilitada = await TasaImportacionService.tasaAutomotorPublicaHabilitada();
+    return res.status(200).json({ data: { habilitada } });
+  } catch (error) {
+    return res.status(500).json({ message: "No se pudo consultar la configuracion de automotores." });
+  }
+};
+
 exports.buscar = async function buscar(req, res) {
   try {
-    await TasaCatalogo.requerirImportable("AUTOMOTORES");
+    if (!(await puedeConsultarModulo(req))) {
+      return res.status(403).json({ message: "La descarga de tasa automotor no se encuentra disponible." });
+    }
     const dominio = validarDominio(req, res);
     if (!dominio) return;
     const boletas = await TasaBoleta.find({
@@ -60,13 +86,15 @@ exports.buscar = async function buscar(req, res) {
       },
     });
   } catch (error) {
-    return res.status(error.status || 500).json({ message: error.status ? error.message : "No se pudieron consultar las boletas." });
+    return res.status(500).json({ message: "No se pudieron consultar las boletas." });
   }
 };
 
 exports.descargar = async function descargar(req, res) {
   try {
-    await TasaCatalogo.requerirImportable("AUTOMOTORES");
+    if (!(await puedeConsultarModulo(req))) {
+      return res.status(403).json({ message: "La descarga de tasa automotor no se encuentra disponible." });
+    }
     const dominio = validarDominio(req, res);
     if (!dominio) return;
     const periodos = Array.isArray(req.body.periodos) ? [...new Set(req.body.periodos)] : [];
@@ -96,6 +124,6 @@ exports.descargar = async function descargar(req, res) {
     return res.send(pdf);
   } catch (error) {
     console.error("Error al generar boleta automotor:", error);
-    return res.status(error.status || 500).json({ message: error.status ? error.message : "No se pudo generar el PDF de las boletas." });
+    return res.status(500).json({ message: "No se pudo generar el PDF de las boletas." });
   }
 };

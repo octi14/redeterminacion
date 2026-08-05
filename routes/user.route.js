@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const UserController = require("../controllers/user.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 
 // "/users" endpoints
 router.get("/", RbacService.requireAnyPermission(["users.read", "users.manage"]), UserController.findAll);

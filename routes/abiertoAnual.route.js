@@ -3,7 +3,7 @@ const router = express.Router();
 // const paginationMiddleware = require("express-pagination-middleware");
 
 const AbiertoAnualController = require("../controllers/abiertoAnual.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 
 const requireRead = RbacService.requirePermission("abiertoAnual.read");
 const requireUpdate = RbacService.requirePermission("abiertoAnual.update");

@@ -1,6 +1,6 @@
 const express = require('express');
 const Config = require('../models/configs.model');
-const RbacService = require('../services/experimentalRbac.service');
+const RbacService = require('../services/rbac.service');
 const {
   loadConfigs,
   getAbiertoAnualPeriodosForFront,
@@ -48,7 +48,7 @@ router.put('/abiertoAnualPeriodos', RbacService.requirePermission('abiertoAnual.
   }
 });
 
-router.put('/update', async (req, res) => {
+router.put('/update', RbacService.requirePermission('system.config.admin'), async (req, res) => {
   try {
     const { key, value } = req.body;
     const updatedConfig = await Config.findOneAndUpdate(

@@ -1,7 +1,7 @@
 const Habilitacion = require('../models/habilitacion.model');
 const HabilitacionService = require('../services/habilitacion.service');
 const TicketController = require('../controllers/ticket.controller');
-const RbacService = require('../services/experimentalRbac.service');
+const RbacService = require('../services/rbac.service');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const TurnoController = require("../controllers/turno.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 // const turnoValidator = require("../validators/turno.validator");
 
 // "/turnos" endpoints

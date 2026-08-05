@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const MultimediaController = require("../controllers/multimedia.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 // const MultimediaValidator = require("../validators/multimedia.validator");
 
 // "/multimedias" endpoints

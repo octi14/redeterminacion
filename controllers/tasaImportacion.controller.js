@@ -21,10 +21,6 @@ function requireArchivo(req) {
   return req.archivoTemporal;
 }
 
-function usuarioActual(req) {
-  return req.currentUser || req.authenticatedUser;
-}
-
 exports.analizar = async function (req, res) {
   let archivo;
   try {
@@ -35,7 +31,7 @@ exports.analizar = async function (req, res) {
       fileSize: archivo.size,
       fileName: fileName(req),
       tipoTasa: tipoTasa(req),
-      user: usuarioActual(req),
+      user: req.authenticatedUser,
     });
     archivo = null;
     return res.status(202).json({ data: importacion });
@@ -57,7 +53,7 @@ exports.publicar = async function (req, res) {
       confirmarReemplazo: req.headers["x-confirmar-reemplazo"] === "true",
       confirmarPeriodosFuturos: req.headers["x-confirmar-periodos-futuros"] === "true",
       guardarOriginal: req.headers["x-guardar-original"] === "true",
-      user: usuarioActual(req),
+      user: req.authenticatedUser,
     });
     archivo = null;
     return res.status(202).json({ data: importacion });
@@ -117,7 +113,7 @@ exports.reporte = async function (req, res) {
       `Archivo: ${importacion.nombreArchivo}`,
       `Fecha: ${importacion.createdAt.toISOString()}`,
       `Entradas: ${importacion.cantidadEntradas}`,
-      `${importacion.tipoTasa === "URBANA" ? "Partidas" : "Dominios"}: ${importacion.cantidadObjetos}`,
+      `Dominios: ${importacion.cantidadObjetos}`,
       `Períodos: ${importacion.periodos.join(", ")}`,
       `Errores: ${importacion.cantidadErrores}`,
       `Advertencias: ${importacion.cantidadAdvertencias}`,
@@ -149,8 +145,16 @@ exports.archivoOriginal = async function (req, res) {
 
 exports.obtenerConfiguracion = async function (_req, res) {
   try {
-    const enabled = await TasaImportacionService.guardarOriginalHabilitado(tipoTasa(_req));
-    return res.status(200).json({ data: { guardarArchivoOriginalTasas: enabled } });
+    const codigoTasa = tipoTasa(_req);
+    const [guardarArchivoOriginalTasas, tasaPublicaHabilitada] = await Promise.all([
+      TasaImportacionService.guardarOriginalHabilitado(codigoTasa),
+      TasaImportacionService.tasaPublicaHabilitada(codigoTasa),
+    ]);
+    return res.status(200).json({ data: {
+      guardarArchivoOriginalTasas,
+      tasaPublicaHabilitada,
+      ...(codigoTasa === "AUTOMOTORES" ? { tasaAutomotorPublicaHabilitada: tasaPublicaHabilitada } : {}),
+    } });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -158,11 +162,37 @@ exports.obtenerConfiguracion = async function (_req, res) {
 
 exports.actualizarConfiguracion = async function (req, res) {
   try {
-    const config = await TasaImportacionService.actualizarConfiguracionGuardarOriginal(
-      req.body.guardarArchivoOriginalTasas,
-      tipoTasa(req)
-    );
-    return res.status(200).json({ data: config });
+    const updates = {};
+    if (Object.prototype.hasOwnProperty.call(req.body, "guardarArchivoOriginalTasas")) {
+      if (typeof req.body.guardarArchivoOriginalTasas !== "boolean") {
+        return res.status(400).json({ message: "El estado de almacenamiento debe ser booleano." });
+      }
+      updates.guardarArchivoOriginalTasas = await TasaImportacionService.actualizarConfiguracionGuardarOriginal(
+        req.body.guardarArchivoOriginalTasas,
+        tipoTasa(req)
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "tasaPublicaHabilitada")) {
+      if (typeof req.body.tasaPublicaHabilitada !== "boolean") {
+        return res.status(400).json({ message: "El estado de visibilidad debe ser booleano." });
+      }
+      updates.tasaPublicaHabilitada = await TasaImportacionService.actualizarConfiguracionTasaPublica(
+        req.body.tasaPublicaHabilitada,
+        tipoTasa(req)
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "tasaAutomotorPublicaHabilitada")) {
+      if (typeof req.body.tasaAutomotorPublicaHabilitada !== "boolean") {
+        return res.status(400).json({ message: "El estado de visibilidad debe ser booleano." });
+      }
+      updates.tasaAutomotorPublicaHabilitada = await TasaImportacionService.actualizarConfiguracionTasaAutomotorPublica(
+        req.body.tasaAutomotorPublicaHabilitada
+      );
+    }
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ message: "No se envio ninguna configuracion valida." });
+    }
+    return res.status(200).json({ data: updates });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -177,12 +207,8 @@ exports.listarPeriodos = async function (_req, res) {
   }
 };
 
-exports.listarTipos = async function (_req, res) {
-  try {
-    return res.status(200).json({ data: await TasaCatalogo.listarConConfig() });
-  } catch (error) {
-    return res.status(error.status || 500).json({ message: error.message });
-  }
+exports.listarTipos = function (_req, res) {
+  return res.status(200).json({ data: TasaCatalogo.listar() });
 };
 
 exports.cambiarEstadoPeriodo = async function (req, res) {

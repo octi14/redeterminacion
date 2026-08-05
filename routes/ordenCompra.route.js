@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const OrdenCompraController = require("../controllers/ordenCompra.controller");
-const RbacService = require("../services/experimentalRbac.service");
+const RbacService = require("../services/rbac.service");
 
 router.get("/", RbacService.requirePermission("compras.ordenes.read"), OrdenCompraController.getAll);
 router.post("/", OrdenCompraController.add);

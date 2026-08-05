@@ -1,6 +1,6 @@
 const { Schema, model } = require("mongoose");
 
-const experimentalUserRoleSchema = new Schema(
+const userRoleSchema = new Schema(
   {
     userId: {
       type: Schema.Types.ObjectId,
@@ -25,11 +25,11 @@ const experimentalUserRoleSchema = new Schema(
     },
   },
   {
-    collection: "experimental_user_roles",
+    collection: "user_roles",
     timestamps: true,
   }
 );
 
-experimentalUserRoleSchema.index({ userId: 1, roleKey: 1 }, { unique: true });
+userRoleSchema.index({ userId: 1, roleKey: 1 }, { unique: true });
 
-module.exports = model("ExperimentalUserRole", experimentalUserRoleSchema);
+module.exports = model("UserRole", userRoleSchema);
