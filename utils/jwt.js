@@ -1,4 +1,4 @@
-const expressJwt = require("express-jwt");
+const { expressjwt: expressJwt } = require("express-jwt");
 const config = require("../config.js");
 // const userService = require("../services/user.service");
 

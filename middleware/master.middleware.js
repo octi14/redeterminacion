@@ -2,11 +2,11 @@ const User = require("../models/user.model");
 
 module.exports = async function requireMaster(req, res, next) {
   try {
-    if (!req.user || !req.user.sub) {
+    if (!req.auth || !req.auth.sub) {
       return res.status(401).json({ message: "Autenticación requerida." });
     }
 
-    const user = await User.findById(req.user.sub).select("username admin");
+    const user = await User.findById(req.auth.sub).select("username admin");
     if (!user) {
       return res.status(401).json({
         message: "La sesión pertenece a un usuario que ya no existe en esta base. Volvé a iniciar sesión.",

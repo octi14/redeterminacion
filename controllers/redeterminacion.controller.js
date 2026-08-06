@@ -19,7 +19,7 @@ exports.getAll = async function (req, res) {
 
 exports.add = async function (req, res) {
   try {
-    const { sub: user } = req.user;
+    const { sub: user } = req.auth;
 
     // TODO: validate req.body
     const {

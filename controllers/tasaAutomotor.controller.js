@@ -28,8 +28,8 @@ function filtroPeriodos(periodos) {
 }
 
 async function usuarioPrivilegiado(req) {
-  if (!req.user || !req.user.sub) return false;
-  const user = await User.findById(req.user.sub).select("admin").lean();
+  if (!req.auth || !req.auth.sub) return false;
+  const user = await User.findById(req.auth.sub).select("admin").lean();
   const role = String(user && user.admin || "").trim().toLowerCase();
   return PRIVILEGED_ROLES.includes(role);
 }

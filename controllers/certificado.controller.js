@@ -18,7 +18,7 @@ exports.getAll = async function (req, res) {
 
 exports.add = async function (req, res) {
   try {
-    const { sub: user } = req.user;
+    const { sub: user } = req.auth;
 
     // TODO: validate req.body
     const {
@@ -80,7 +80,7 @@ exports.delete = async function (req, res) {
   try {
     // TODO: validate req.params
     const id  = req.params.name;
-    // const { sub: user } = req.user;
+    // const { sub: user } = req.auth;
 
     await CertificadoService.delete(id);
 
