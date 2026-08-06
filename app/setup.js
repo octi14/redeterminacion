@@ -6,12 +6,7 @@ let mongoServer;
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
   const url = mongoServer.getUri();
-  await mongoose.connect(url, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    useCreateIndex: true, // Habilitar el uso de createIndex
-    useFindAndModify: false,
-  });
+  await mongoose.connect(url);
 });
 
 afterEach(async () => {

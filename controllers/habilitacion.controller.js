@@ -452,7 +452,7 @@ exports.migrarHabilitacion = async function (req, res) {
     const objectIdArray = [];
 
     while ((match = objectIdRegex.exec(documentosString)) !== null) {
-      objectIdArray.push(ObjectId(match[1]));
+      objectIdArray.push(new ObjectId(match[1]));
     }
 
     // Utilizamos una expresión regular para extraer los nombres de las propiedades
