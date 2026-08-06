@@ -39,6 +39,57 @@ function publicObjectUrl(key) {
   return `https://${BUCKET}.s3.${region}.amazonaws.com/${key}`;
 }
 
+/** Extrae la key S3 de una URL pública o firmada (sin mutar el objeto). */
+function keyFromStoredUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    const path = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
+    return path || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Resuelve la key S3 del documento (solo lectura: list/head).
+ * Preferencia: URL guardada en Mongo → prefijo por nombre + nroTramite.
+ */
+async function resolveDocumentoS3Key(documento, nroSolicitud) {
+  const fromUrl = keyFromStoredUrl(documento.url);
+  if (fromUrl) {
+    try {
+      await s3.headObject({ Bucket: BUCKET, Key: fromUrl }).promise();
+      return fromUrl;
+    } catch (_) {
+      // URL vieja/rota: caer al listado por prefijo (mismo comportamiento histórico).
+    }
+  }
+
+  const sanitizedNombre = documento.nombreDocumento;
+  const altSanitizedNombre =
+    documento.nombreDocumento?.replace(/\//g, '_') || 'archivo_desconocido';
+  const prefixes = [
+    `mongo-backup/${sanitizedNombre}_${nroSolicitud || 'tramite_desconocido'}`,
+    `mongo-backup/${altSanitizedNombre}_${nroSolicitud || 'tramite_desconocido'}`,
+  ];
+
+  for (const prefix of prefixes) {
+    const listResponse = await s3
+      .listObjectsV2({ Bucket: BUCKET, Prefix: prefix })
+      .promise();
+    if (listResponse.Contents && listResponse.Contents.length > 0) {
+      return listResponse.Contents[0].Key;
+    }
+  }
+
+  throw new Error(
+    `No se encontraron archivos para el prefijo: ${prefixes[0]} ni para ${prefixes[1]}`
+  );
+}
+
 /**
  * Reserva nro de trámite y firma URLs PUT a S3.
  * El navegador sube los binarios directo a S3 (no pasan por la RAM del dyno).
@@ -224,7 +275,11 @@ exports.getById = async function (req, res) {
   }
 };
 
-//esta operación se hacía sobre un bucket de mongoDB atlas, ahora funciona sobre un bucket de amazon s3
+/**
+ * Devuelve metadatos + URL firmada GET por documento.
+ * Solo lectura: no getObject del body, no delete, no escribe Mongo/S3.
+ * El binario lo baja el browser directo desde S3 (evita R14 en el dyno).
+ */
 exports.getDocumentosById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -237,71 +292,43 @@ exports.getDocumentosById = async (req, res) => {
       });
     }
 
-    const documentosArray = habilitacion.documentos.documentos;
+    const documentosArray = habilitacion.documentos?.documentos || [];
     const documentosObtenidos = {};
 
     for (const documento of documentosArray) {
       try {
-        // Sanitización del nombre del archivo
-        const sanitizedNombre = documento.nombreDocumento
-        const altSanitizedNombre = documento.nombreDocumento?.replace(/\//g, '_') || 'archivo_desconocido';
-
-        // Agregar el número de trámite al nombre del archivo
-        const key = `mongo-backup/${sanitizedNombre}_${datosHab.nroSolicitud || 'tramite_desconocido'}`;
-
-        // Buscar archivos que coincidan con el prefijo
-        const listResponse = await s3.listObjectsV2({
-          Bucket: 'haciendagesell',
-          Prefix: key,
-        }).promise();
-
-        var newListResponse = null
-        var data = null
-
-        if (!listResponse.Contents || listResponse.Contents.length === 0) {
-          // Agregar el número de trámite al nombre del archivo
-          const newKey = `mongo-backup/${altSanitizedNombre}_${datosHab.nroSolicitud || 'tramite_desconocido'}`;
-
-          // Buscar archivos que coincidan con el prefijo
-          newListResponse = await s3.listObjectsV2({
-            Bucket: 'haciendagesell',
-            Prefix: newKey,
-          }).promise();
-
-          if(!newListResponse.Contents || newListResponse.Contents.length === 0){
-            throw new Error(`No se encontraron archivos para el prefijo: ${key} ni para ${newKey}`);
-          }
-        }
-
-        // Tomar el primer archivo que coincida
-        if(listResponse.Contents.length > 0){
-          const fileKey = listResponse.Contents[0].Key;
-          // Descargar el archivo desde S3
-          data = await s3.getObject({
-            Bucket: 'haciendagesell',
-            Key: fileKey,
-          }).promise();
-        }else if(newListResponse.Contents.length > 0){
-          const newFileKey = newListResponse.Contents[0].Key;
-          // Descargar el archivo desde S3
-          data = await s3.getObject({
-            Bucket: 'haciendagesell',
-            Key: newFileKey,
-          }).promise();
-        }
-
-        // Extraer la extensión del archivo desde el nombre
-        const extension = key.split('.').pop() || 'bin';
+        const fileKey = await resolveDocumentoS3Key(
+          documento,
+          datosHab.nroSolicitud
+        );
+        const head = await s3
+          .headObject({ Bucket: BUCKET, Key: fileKey })
+          .promise();
+        const contentType =
+          head.ContentType || 'application/octet-stream';
+        const extension =
+          (fileKey.split('.').pop() || extensionFromContentType(contentType)).replace(
+            /[^a-zA-Z0-9]+/g,
+            ''
+          ) || 'bin';
+        const url = s3.getSignedUrl('getObject', {
+          Bucket: BUCKET,
+          Key: fileKey,
+          Expires: 4 * 60 * 60,
+          ResponseContentType: contentType,
+        });
 
         documentosObtenidos[documento.nombreDocumento] = {
-          contentType: data.ContentType,
-          data: data.Body.toString('base64'),
-          filename: `${documento.nombreDocumento}.${extension}`, // Agregar la extensión al nombre del archivo
+          url,
+          contentType,
+          filename: `${documento.nombreDocumento}.${extension}`,
+          key: fileKey,
         };
       } catch (error) {
-        console.error(`Error descargando archivo desde S3 para documento ${documento.nombreDocumento}:`, error.message);
-
-        // Manejo de errores si no se encuentra el archivo
+        console.error(
+          `Error resolviendo documento S3 ${documento.nombreDocumento}:`,
+          error.message
+        );
         documentosObtenidos[documento.nombreDocumento] = {
           error: `Archivo no encontrado en S3.`,
         };
@@ -315,6 +342,47 @@ exports.getDocumentosById = async (req, res) => {
     return res.status(400).json({
       message: e.message,
     });
+  }
+};
+
+/**
+ * Fallback: streamea UN archivo (si el browser no puede GET directo a S3 por CORS).
+ * Solo lectura; no modifica S3 ni Mongo.
+ */
+exports.downloadDocumentoByNombre = async (req, res) => {
+  try {
+    const { id, nombreDocumento } = req.params;
+    const habilitacion = await Habilitacion.findById(id).select('documentos');
+    const datosHab = await Habilitacion.findById(id).select('-documentos');
+    if (!habilitacion) {
+      return res.status(404).json({ message: 'Habilitación no encontrada.' });
+    }
+    const documento = (habilitacion.documentos?.documentos || []).find(
+      (d) => d.nombreDocumento === nombreDocumento
+    );
+    if (!documento) {
+      return res.status(404).json({ message: 'Documento no encontrado.' });
+    }
+    const fileKey = await resolveDocumentoS3Key(documento, datosHab.nroSolicitud);
+    const head = await s3.headObject({ Bucket: BUCKET, Key: fileKey }).promise();
+    res.setHeader(
+      'Content-Type',
+      head.ContentType || 'application/octet-stream'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(nombreDocumento)}"`
+    );
+    s3.getObject({ Bucket: BUCKET, Key: fileKey })
+      .createReadStream()
+      .on('error', (err) => {
+        console.error('Error streaming S3:', err.message);
+        if (!res.headersSent) res.status(500).end();
+        else res.end();
+      })
+      .pipe(res);
+  } catch (e) {
+    return res.status(400).json({ message: e.message });
   }
 };
 

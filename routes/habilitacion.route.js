@@ -13,6 +13,10 @@ router.put("/lazy/:id", HabilitacionController.updateLazy);
 // router.delete("/:id", ObraController.delete);
 router.get("/:id", HabilitacionController.getById);
 router.get("/documentos/:id", HabilitacionController.getDocumentosById);
+router.get(
+  "/documentos/:id/file/:nombreDocumento",
+  HabilitacionController.downloadDocumentoByNombre
+);
 router.post("/documentos/delete/:id", HabilitacionController.deleteDocumentosById);
 router.post("/nroTramite", HabilitacionController.getByNroTramite);
 // router.post("/search", ObraController.search);
