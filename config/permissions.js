@@ -29,6 +29,7 @@ const PERMISSIONS = {
   COMPRAS_VALES_UPDATE: "compras.vales.update",
   COMPRAS_VEHICULOS_MANAGE: "compras.vehiculos.manage",
   COMPRAS_DASHBOARD: "compras.dashboard",
+  COMPRAS_COMBUSTIBLE_ESTADISTICAS: "compras.combustible.estadisticas",
 
   HACIENDA_OBRAS_READ: "hacienda.obras.read",
   HACIENDA_OBRAS_UPDATE: "hacienda.obras.update",
