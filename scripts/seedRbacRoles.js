@@ -111,6 +111,7 @@ const roles = [
       "hacienda.obras.update",
       "hacienda.indices.read",
       "hacienda.indices.update",
+      "pagos.read",
     ],
   },
   {
@@ -123,6 +124,7 @@ const roles = [
       "hacienda.obras.export",
       "hacienda.indices.read",
       "hacienda.indices.update",
+      "pagos.read",
       "dashboard.read",
       "activities.read",
     ],
@@ -180,6 +182,7 @@ const roles = [
       "hacienda.obras.export",
       "hacienda.indices.read",
       "hacienda.indices.update",
+      "pagos.read",
       "abiertoAnual.read",
       "maestroComercial.read",
       "dashboard.read",

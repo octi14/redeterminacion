@@ -38,6 +38,8 @@ const PERMISSIONS = {
   HACIENDA_INDICES_READ: "hacienda.indices.read",
   HACIENDA_INDICES_UPDATE: "hacienda.indices.update",
 
+  PAGOS_READ: "pagos.read",
+
   ABIERTO_ANUAL_READ: "abiertoAnual.read",
   ABIERTO_ANUAL_UPDATE: "abiertoAnual.update",
   ABIERTO_ANUAL_EXPORT: "abiertoAnual.export",
