@@ -31,7 +31,7 @@ exports.analizar = async function (req, res) {
       fileSize: archivo.size,
       fileName: fileName(req),
       tipoTasa: tipoTasa(req),
-      user: req.authenticatedUser,
+      user: req.currentUser,
     });
     archivo = null;
     return res.status(202).json({ data: importacion });
@@ -53,7 +53,7 @@ exports.publicar = async function (req, res) {
       confirmarReemplazo: req.headers["x-confirmar-reemplazo"] === "true",
       confirmarPeriodosFuturos: req.headers["x-confirmar-periodos-futuros"] === "true",
       guardarOriginal: req.headers["x-guardar-original"] === "true",
-      user: req.authenticatedUser,
+      user: req.currentUser,
     });
     archivo = null;
     return res.status(202).json({ data: importacion });
@@ -194,7 +194,7 @@ exports.actualizarConfiguracion = async function (req, res) {
     }
     return res.status(200).json({ data: updates });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.status || 500).json({ message: error.message });
   }
 };
 
@@ -207,8 +207,13 @@ exports.listarPeriodos = async function (_req, res) {
   }
 };
 
-exports.listarTipos = function (_req, res) {
-  return res.status(200).json({ data: TasaCatalogo.listar() });
+exports.listarTipos = async function (_req, res) {
+  try {
+    const data = await TasaCatalogo.listarConConfig();
+    return res.status(200).json({ data });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 exports.cambiarEstadoPeriodo = async function (req, res) {

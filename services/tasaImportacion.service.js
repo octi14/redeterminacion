@@ -9,6 +9,7 @@ const TasaBoleta = require("../models/tasaBoleta.model");
 const TasaObjeto = require("../models/tasaObjeto.model");
 const TasaMensaje = require("../models/tasaMensaje.model");
 const TasaCatalogo = require("./tasaCatalogo.service");
+const { getCachedConfig } = require("./configs.service");
 
 const MAX_OBSERVACIONES = 5000;
 const S3_BUCKET = process.env.AWS_BUCKET || "haciendagesell";
@@ -466,6 +467,25 @@ async function guardarOriginalHabilitado(tipoTasa = "AUTOMOTORES") {
   return Boolean(config && config.value === true);
 }
 
+// Gate de configuraciones generales: el switch de guardado de archivo original por tasa
+// solo puede usarse si el candado maestro global y el candado especifico de la tasa estan
+// ambos habilitados desde /admin/configuraciones.
+function almacenamientoOriginalHabilitadoDesdeConfigGeneral(tipoTasa = "AUTOMOTORES") {
+  let uploadEnabled = true;
+  let importConfig = {};
+  try {
+    uploadEnabled = getCachedConfig("boletaTasasUploadEnabled") !== false;
+  } catch (_) {
+    uploadEnabled = true;
+  }
+  try {
+    importConfig = getCachedConfig("boletaTasasImportaciones") || {};
+  } catch (_) {
+    importConfig = {};
+  }
+  return uploadEnabled && importConfig[tipoTasa] !== false;
+}
+
 async function tasaPublicaHabilitada(tipoTasa = "AUTOMOTORES") {
   const tasa = TasaCatalogo.requerir(tipoTasa);
   const key = tasa.codigo === "AUTOMOTORES"
@@ -756,7 +776,11 @@ async function ejecutarPublicacionArchivo({ importacionId, filePath, guardarOrig
       await importacion.save({ session });
     });
 
-    if (guardarOriginal && await guardarOriginalHabilitado(importacion.tipoTasa)) {
+    if (
+      guardarOriginal
+      && await guardarOriginalHabilitado(importacion.tipoTasa)
+      && almacenamientoOriginalHabilitadoDesdeConfigGeneral(importacion.tipoTasa)
+    ) {
       try {
         importacion.archivoOriginal = await subirOriginalArchivo(filePath, importacion, importacion.nombreArchivo);
         await importacion.save();
@@ -1002,6 +1026,12 @@ async function deshabilitarImportacion(importacionId) {
 
 async function actualizarConfiguracionGuardarOriginal(value, tipoTasa = "AUTOMOTORES") {
   const tasa = TasaCatalogo.requerir(tipoTasa);
+  if (value === true && !almacenamientoOriginalHabilitadoDesdeConfigGeneral(tasa.codigo)) {
+    throw Object.assign(
+      new Error(`El almacenamiento del archivo original de ${tasa.nombre} esta deshabilitado desde configuraciones generales.`),
+      { status: 409 }
+    );
+  }
   return Config.findOneAndUpdate(
     { key: `guardarArchivoOriginalTasas:${tasa.codigo}` },
     {

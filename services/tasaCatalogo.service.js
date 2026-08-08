@@ -90,14 +90,10 @@ function listar() {
 }
 
 async function listarConConfig() {
-  const [importacionesConfig, coloresConfig] = await Promise.all([
-    obtenerImportacionesConfig(),
-    obtenerColoresConfig(),
-  ]);
+  const coloresConfig = await obtenerColoresConfig();
   return TASAS.map((tasa) => ({
     ...tasa,
     tema: coloresConfig[tasa.codigo] || temaDefault(tasa),
-    importacionHabilitada: importacionesConfig[tasa.codigo] !== false,
   }));
 }
 
@@ -124,15 +120,6 @@ function requerir(codigo, { importable = false } = {}) {
   return tasa;
 }
 
-async function requerirImportable(codigo) {
-  const tasa = await requerirConConfig(codigo);
-  const config = await obtenerImportacionesConfig();
-  if (config[tasa.codigo] === false) {
-    throw Object.assign(new Error(`El modulo de ${tasa.nombre} esta deshabilitado desde configuraciones generales.`), { status: 409 });
-  }
-  return { ...tasa, importacionHabilitada: true };
-}
-
 async function requerirConConfig(codigo) {
   const tasa = await obtenerConConfig(codigo);
   if (!tasa) throw Object.assign(new Error("El tipo de tasa solicitado no existe."), { status: 400 });
@@ -153,5 +140,4 @@ module.exports = {
   obtenerImportacionesConfig,
   requerir,
   requerirConConfig,
-  requerirImportable,
 };

@@ -21,17 +21,17 @@ const GENERAL_CONFIG_KEYS = {
   },
   boletaTasasUploadEnabled: {
     defaultValue: true,
-    description: 'Habilita o deshabilita el almacenamiento del archivo original de importaciones de boletas.',
+    description: 'Candado maestro que habilita el switch de almacenamiento del archivo original de importaciones de boletas.',
     normalize: (value) => value !== false,
   },
   boletaTasasImportaciones: {
     defaultValue: TasaCatalogo.normalizarImportacionesConfig(),
-    description: 'Habilita o deshabilita los modulos de importacion de boletas por tipo de tasa.',
+    description: 'Habilita, por tipo de tasa, el switch de almacenamiento del archivo original en Administrar boletas.',
     normalize: (value) => TasaCatalogo.normalizarImportacionesConfig(value),
   },
   boletaTasasColors: {
     defaultValue: TasaCatalogo.normalizarColoresConfig(),
-    description: 'Colores usados para generar boletas de tasas.',
+    description: 'Colores usados por cada tasa en la pantalla de Administrar boletas.',
     normalize: (value) => TasaCatalogo.normalizarColoresConfig(value),
   },
 };
@@ -206,7 +206,8 @@ exports.getAbiertoAnualPeriodosForFront = async () => {
 
   const primerDiaPeriodo1 = parseDDMM(raw.periodos[0].min, year);
   const ultimoDiaRect = parseDDMM(raw.rectificacion.max, year);
-  const popUpAbiertoAnualCerrado = todayStart < primerDiaPeriodo1.getTime() || todayStart > ultimoDiaRect.getTime();
+  const popUpAbiertoAnualCerrado = !rectificacion
+    && (todayStart < primerDiaPeriodo1.getTime() || todayStart > ultimoDiaRect.getTime());
 
   return {
     minDates,
