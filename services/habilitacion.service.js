@@ -50,6 +50,11 @@ exports.getById = async function (id) {
   return Habilitacion.findById(id);
 };
 
+exports.getMailByNroTramite = async function (nroTramite) {
+  const habilitacion = await Habilitacion.findOne({ nroSolicitud: nroTramite }).select('solicitante.mail');
+  return habilitacion?.solicitante?.mail || null;
+};
+
 // exports.getMany = async function (ids) {
 //   return Obra.find().where("_id").in(ids);
 // };

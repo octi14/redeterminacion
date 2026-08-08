@@ -1,5 +1,7 @@
 let TurnoService = require("../services/turno.service");
 const RbacService = require("../services/rbac.service");
+const HabilitacionService = require("../services/habilitacion.service");
+const NotificacionesService = require("../services/notificaciones.service");
 
 async function requireTurnoUpdatePermission(req) {
   const context = await RbacService.getCurrentUserContext(req);
@@ -41,29 +43,17 @@ exports.add = async function (req, res) {
     }
 
     const createdTurno = await TurnoService.create(turnoData);
+
+    const { notificacion } = req.body;
+    if (notificacion?.templateKey) {
+      HabilitacionService.getMailByNroTramite(nroTramite)
+        .then((mail) => NotificacionesService.notificar(mail, notificacion.templateKey, notificacion.context || {}))
+        .catch((err) => console.error('No se pudo resolver el destinatario del turno:', err.message));
+    }
+
     return res.status(201).json({
       message: "Created",
       data: createdTurno,
-    });
-  } catch (e) {
-    return res.status(400).json({
-      message: e.message,
-    });
-  }
-};
-
-exports.update = async function (req, res) {
-  try {
-    // TODO: validate req.params and req.body
-    const { id } = req.params;
-    const camposActualizados = req.body.turno; // Suponiendo que envías los campos actualizados en el cuerpo de la solicitud.
-
-
-    const updated = await TurnoService.update(id, camposActualizados);
-
-    return res.status(200).json({
-      message: "Turno modificado.",
-      data: updated,
     });
   } catch (e) {
     return res.status(400).json({
@@ -102,23 +92,6 @@ exports.getByNroTramite = async function (req, res) {
   }
 };
 
-exports.delete = async function (req, res) {
-  try {
-    // TODO: validate req.params and req.body
-    const { id } = req.params;
-
-    TurnoService.delete(id);
-
-    return res.status(200).json({
-      message: "Turno eliminado",
-    });
-  } catch (e) {
-    return res.status(400).json({
-      message: "No se pudo eliminar",
-    });
-  }
-};
-
 exports.update = async function (req, res) {
   try {
     const { id } = req.params;
@@ -127,6 +100,13 @@ exports.update = async function (req, res) {
     await requireTurnoUpdatePermission(req);
 
     const updated = await TurnoService.update(id, camposActualizados);
+
+    const { notificacion } = req.body;
+    if (notificacion?.templateKey && updated?.nroTramite) {
+      HabilitacionService.getMailByNroTramite(updated.nroTramite)
+        .then((mail) => NotificacionesService.notificar(mail, notificacion.templateKey, notificacion.context || {}))
+        .catch((err) => console.error('No se pudo resolver el destinatario del turno:', err.message));
+    }
 
     return res.status(200).json({
       message: "Turno modificado.",

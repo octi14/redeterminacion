@@ -2,6 +2,7 @@ const Habilitacion = require('../models/habilitacion.model');
 const HabilitacionService = require('../services/habilitacion.service');
 const TicketController = require('../controllers/ticket.controller');
 const RbacService = require('../services/rbac.service');
+const NotificacionesService = require('../services/notificaciones.service');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -147,6 +148,11 @@ exports.add = async function (req, res) {
     formData.nroSolicitud = nroTramite;
     const createdHabilitacion = await HabilitacionService.create(formData);
 
+    const { notificacion } = req.body;
+    if (notificacion?.templateKey) {
+      NotificacionesService.notificar(formData.solicitante?.mail, notificacion.templateKey, { ...notificacion.context, nroTramite });
+    }
+
     if (!res.headersSent) {
       return res.status(201).json({
         message: 'Habilitación creada con éxito.',
@@ -159,51 +165,6 @@ exports.add = async function (req, res) {
         message: e.message,
       });
     }
-  }
-};
-
-
-exports.update = async (req, res) => {
-  try {
-    const { id } = req.params; // Suponiendo que proporcionas el ID del documento a actualizar en los parámetros de la solicitud.
-    const camposActualizados = req.body; // Suponiendo que envías los campos actualizados en el cuerpo de la solicitud.
-
-    // Encontrar el documento por ID y actualizarlo
-    const documentoActualizado = await HabilitacionService.update(
-      id,
-      camposActualizados.habilitacion
-    );
-
-    if (!documentoActualizado) {
-      return res.status(404).json({ error: 'Documento no encontrado' });
-    }
-    return res.status(200).json(documentoActualizado);
-  } catch (error) {
-    return res.status(400).json({
-      message: e.message,
-    });
-  }
-};
-
-exports.updateLazy = async (req, res) => {
-  try {
-    const { id } = req.params; // Suponiendo que proporcionas el ID del documento a actualizar en los parámetros de la solicitud.
-    const camposActualizados = req.body; // Suponiendo que envías los campos actualizados en el cuerpo de la solicitud.
-
-    // Encontrar el documento por ID y actualizarlo
-    const documentoActualizado = await HabilitacionService.updateLazy(
-      id,
-      camposActualizados.habilitacion
-    );
-
-    if (!documentoActualizado) {
-      return res.status(404).json({ error: 'Documento no encontrado' });
-    }
-    return res.status(200).json(documentoActualizado);
-  } catch (error) {
-    return res.status(400).json({
-      message: e.message,
-    });
   }
 };
 
@@ -500,6 +461,12 @@ exports.update = async (req, res) => {
     if (!documentoActualizado) {
       return res.status(404).json({ error: 'Documento no encontrado' });
     }
+
+    const { notificacion } = camposActualizados;
+    if (notificacion?.templateKey) {
+      NotificacionesService.notificar(documentoActualizado.solicitante?.mail, notificacion.templateKey, notificacion.context || {});
+    }
+
     return res.status(200).json(documentoActualizado);
   } catch (error) {
     return res.status(error.status || 400).json({
@@ -522,6 +489,12 @@ exports.updateLazy = async (req, res) => {
     if (!documentoActualizado) {
       return res.status(404).json({ error: 'Documento no encontrado' });
     }
+
+    const { notificacion } = camposActualizados;
+    if (notificacion?.templateKey) {
+      NotificacionesService.notificar(documentoActualizado.solicitante?.mail, notificacion.templateKey, notificacion.context || {});
+    }
+
     return res.status(200).json(documentoActualizado);
   } catch (error) {
     return res.status(error.status || 400).json({

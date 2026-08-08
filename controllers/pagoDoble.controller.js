@@ -1,6 +1,7 @@
 const PagoDoble = require('../models/pagoDoble.model');
 const PagoDobleService = require('../services/pagoDoble.service');
 const TicketRecaudacionesController = require('../controllers/ticketRecaudaciones.controller');
+const NotificacionesService = require('../services/notificaciones.service');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -88,6 +89,11 @@ exports.add = async function (req, res) {
     formData.nroSolicitud = nroTramite;
     const createdPagoDoble = await PagoDobleService.create(formData);
 
+    const { notificacion } = req.body;
+    if (notificacion?.templateKey) {
+      NotificacionesService.notificar(formData.solicitante?.mail, notificacion.templateKey, { ...notificacion.context, nroTramite });
+    }
+
     if (!res.headersSent) {
       return res.status(201).json({
         message: 'éxito.',
@@ -117,10 +123,16 @@ exports.update = async (req, res) => {
     if (!documentoActualizado) {
       return res.status(404).json({ error: 'Documento no encontrado' });
     }
+
+    const { notificacion } = camposActualizados;
+    if (notificacion?.templateKey) {
+      NotificacionesService.notificar(documentoActualizado.solicitante?.mail, notificacion.templateKey, notificacion.context || {});
+    }
+
     return res.status(200).json(documentoActualizado);
   } catch (error) {
     return res.status(400).json({
-      message: e.message,
+      message: error.message,
     });
   }
 };
@@ -142,7 +154,7 @@ exports.updateLazy = async (req, res) => {
     return res.status(200).json(documentoActualizado);
   } catch (error) {
     return res.status(400).json({
-      message: e.message,
+      message: error.message,
     });
   }
 };

@@ -1,5 +1,6 @@
 const correoService = require('../services/correo.service');
 const emailTemplateService = require('../services/emailTemplate.service');
+const NotificacionesService = require('../services/notificaciones.service');
 const { getCachedConfig } = require('../services/configs.service');
 
 exports.enviarCorreo = async (req, res) => {
@@ -9,13 +10,11 @@ exports.enviarCorreo = async (req, res) => {
       return res.status(203).json({ message: 'Funcionalidad deshabilitada.' });
     }
 
-    const { destinatario, templateKey, context } = req.body;
-    let { asunto, mensaje } = req.body;
+    const { destinatario, templateKey, context, asunto, mensaje } = req.body;
 
     if (templateKey) {
-      const rendered = await emailTemplateService.render(templateKey, context || {});
-      asunto = rendered.asunto;
-      mensaje = rendered.mensaje + correoService.getFooter();
+      await NotificacionesService.enviarPlantilla(destinatario, templateKey, context || {});
+      return res.status(200).json({ message: 'Correo enviado con exito' });
     }
 
     const resultado = await correoService.enviarCorreo(destinatario, asunto, mensaje);
