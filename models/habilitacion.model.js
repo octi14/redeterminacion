@@ -36,7 +36,8 @@ const inmuebleSchema = new Schema({
   rubro: { type: String, required: true },
   descripcionRubro: { type: String },
   espacioPublico: { type: Boolean, default: false },
-  serviciosHoteleria: [{ servicio: String, value: Boolean }],
+  // _id: false evita que un `id` de UI (p.ej. "1") se interprete como ObjectId.
+  serviciosHoteleria: [{ servicio: String, value: Boolean, _id: false }],
   otrosServicios: { type: String, },
   marquesina: { type: Boolean, default: false },
   mercaderia: { type: Boolean, default: false },
