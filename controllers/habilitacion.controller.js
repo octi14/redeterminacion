@@ -189,6 +189,15 @@ exports.add = async function (req, res) {
     }
 
     formData.nroSolicitud = nroTramite;
+
+    // Sanitizar serviciosHoteleria: el front puede mandar `id` de UI que Mongoose
+    // interpreta como `_id` y falla el cast a ObjectId ("1", "2", ...).
+    if (formData.inmueble && Array.isArray(formData.inmueble.serviciosHoteleria)) {
+      formData.inmueble.serviciosHoteleria = formData.inmueble.serviciosHoteleria.map(
+        ({ servicio, value }) => ({ servicio, value })
+      );
+    }
+
     await HabilitacionService.create(formData);
 
     return res.status(201).json({
