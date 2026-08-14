@@ -1,5 +1,6 @@
 const config = require("../config.js");
 const ProvinciaNetPago = require("../models/provinciaNetPago.model.js");
+const DeudaPagoService = require("./deudaPago.service");
 
 const STATUS_PRIORITY = {
   Instanciado: 1,
@@ -46,10 +47,8 @@ function normalizePayments(payments) {
   }));
 }
 
-/** Fixture para homologación hasta tener deuda urbana real.
- * Requiere PROVINCIA_NET_HOMOLOG_BARCODE: PN valida la barra (ceros → "barra erronea").
- */
-function buildHomologacionFixture() {
+/** Fixture para homologación. Requiere PROVINCIA_NET_HOMOLOG_BARCODE. */
+function buildHomologacionFixture(tipoTasa = "URBANA") {
   const barcode = String(config.PROVINCIA_NET_HOMOLOG_BARCODE || "").trim();
   if (!barcode || /^0+$/.test(barcode)) {
     const err = new Error(
@@ -58,11 +57,14 @@ function buildHomologacionFixture() {
     err.status = 400;
     throw err;
   }
+  const detail =
+    tipoTasa === "AUTOMOTORES"
+      ? "Municipalidad de Villa Gesell. Tasa Automotor (homologación)"
+      : "Municipalidad de Villa Gesell. Tasa por Servicios Urbanos";
   return [
     {
       amount: amountToString(config.PROVINCIA_NET_HOMOLOG_AMOUNT || "1000.00"),
-      detail:
-        "Municipalidad de Villa Gesell. Tasa por Servicios Urbanos",
+      detail,
       barcode,
       service: config.PROVINCIA_NET_SERVICE_CODE,
     },
@@ -141,13 +143,39 @@ exports.createPreorder = async function createPreorder({
   payer,
   payments,
   objetoClave,
+  tipoTasa,
+  itemIds,
+  periodos,
   useHomologacionFixture,
 } = {}) {
   const normalizedPayer = normalizePayer(payer);
-  const paymentItems =
-    useHomologacionFixture || !payments?.length
-      ? buildHomologacionFixture()
-      : normalizePayments(payments);
+  const tipo = DeudaPagoService.normalizarTipoTasa(tipoTasa || "URBANA");
+
+  const wantsFixture = useHomologacionFixture === true;
+  const hasExplicitPayments = Array.isArray(payments) && payments.length > 0;
+
+  let paymentItems;
+  let resolvedTipo = tipo;
+  let resolvedClave = objetoClave || null;
+
+  if (wantsFixture) {
+    paymentItems = buildHomologacionFixture(tipo);
+  } else if (hasExplicitPayments) {
+    paymentItems = normalizePayments(payments);
+  } else if (useHomologacionFixture === false && objetoClave) {
+    const built = await DeudaPagoService.construirPaymentsDesdeDeuda({
+      tipoTasa: tipo,
+      objetoClave,
+      itemIds,
+      periodos,
+    });
+    paymentItems = built.payments;
+    resolvedTipo = built.tipoTasa;
+    resolvedClave = built.objetoClave;
+  } else {
+    // Compat histórico: sin flag explícito false → fixture
+    paymentItems = buildHomologacionFixture(tipo);
+  }
 
   const payload = {
     payer: normalizedPayer,
@@ -182,8 +210,8 @@ exports.createPreorder = async function createPreorder({
         gender: normalizedPayer.gender,
       },
       payments: paymentItems,
-      tipoTasa: "URBANA",
-      objetoClave: objetoClave || null,
+      tipoTasa: resolvedTipo,
+      objetoClave: resolvedClave,
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
@@ -193,6 +221,8 @@ exports.createPreorder = async function createPreorder({
     url: checkoutUrl,
     status: doc.status,
     totalAmount: doc.totalAmount,
+    tipoTasa: doc.tipoTasa,
+    objetoClave: doc.objetoClave,
   };
 };
 
