@@ -12,4 +12,10 @@ module.exports = {
   AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
   AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
   AWS_REGION: process.env.AWS_REGION || "us-east-2",
+  PROVINCIA_NET_API_URL:
+    process.env.PROVINCIA_NET_API_URL ||
+    "https://stg-service-payment.provincianet.com.ar",
+  PROVINCIA_NET_API_KEY: process.env.PROVINCIA_NET_API_KEY,
+  PROVINCIA_NET_SERVICE_CODE:
+    process.env.PROVINCIA_NET_SERVICE_CODE || "NETPAGOS0001",
 };
