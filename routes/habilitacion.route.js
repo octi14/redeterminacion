@@ -7,6 +7,11 @@ const HabilitacionController = require("../controllers/habilitacion.controller")
 // endpoints
 router.get("/", HabilitacionController.getAll);
 router.post("/presign", HabilitacionController.presignDocumentos);
+router.post(
+  "/upload-proxy",
+  express.raw({ type: '*/*', limit: '16mb' }),
+  HabilitacionController.uploadProxy
+);
 router.post("/", HabilitacionController.add);
 router.put("/:id", HabilitacionController.update);
 router.put("/lazy/:id", HabilitacionController.updateLazy);

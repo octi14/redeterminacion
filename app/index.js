@@ -36,9 +36,19 @@ const app = express();
 
 app.use(cors());
 
-// Configurar express.json() con un límite de 100 MB para datos analizados
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: true }));
+// El proxy de subida envía binario crudo: no parsear JSON en esa ruta.
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path === '/habilitaciones/upload-proxy') {
+    return next();
+  }
+  return express.json({ limit: '100mb' })(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path === '/habilitaciones/upload-proxy') {
+    return next();
+  }
+  return express.urlencoded({ extended: true })(req, res, next);
+});
 
 // Agregar el middleware para JWT
 app.use(jwt());

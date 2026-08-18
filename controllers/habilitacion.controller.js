@@ -3,6 +3,14 @@ const HabilitacionService = require('../services/habilitacion.service');
 const TicketController = require('../controllers/ticket.controller');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
+const {
+  normalizeContentType,
+  extensionFromContentType,
+  slugifyDocumentoNombre,
+  buildDocumentoKey,
+  isSafeMongoBackupKey,
+  toNumberOrUndefined,
+} = require('../utils/s3Documentos');
 
 const AWS = require('aws-sdk');
 
@@ -27,16 +35,40 @@ exports.getAll = async function (req, res) {
 };
 
 const BUCKET = 'haciendagesell';
-
-function extensionFromContentType(contentType) {
-  const raw = String(contentType || 'application/octet-stream').split(';')[0].trim();
-  const subtype = raw.split('/')[1] || 'bin';
-  return subtype.split('+')[0] || 'bin';
-}
+const PRESIGN_EXPIRES_SECONDS = 60 * 60;
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
 function publicObjectUrl(key) {
   const region = process.env.AWS_REGION || 'us-east-1';
   return `https://${BUCKET}.s3.${region}.amazonaws.com/${key}`;
+}
+
+function signPutUrl(key, contentType) {
+  return s3.getSignedUrl('putObject', {
+    Bucket: BUCKET,
+    Key: key,
+    ContentType: contentType,
+    Expires: PRESIGN_EXPIRES_SECONDS,
+  });
+}
+
+function mapUploads(files, nroTramite) {
+  return files.map((file) => {
+    const nombreDocumento = file.nombreDocumento;
+    if (!nombreDocumento) {
+      throw new Error('Cada archivo requiere nombreDocumento.');
+    }
+    const contentType = normalizeContentType(file.contentType);
+    const key = buildDocumentoKey(nombreDocumento, nroTramite, contentType);
+    return {
+      campo: file.campo || null,
+      nombreDocumento,
+      contentType,
+      key,
+      uploadUrl: signPutUrl(key, contentType),
+      url: publicObjectUrl(key),
+    };
+  });
 }
 
 /** Extrae la key S3 de una URL pública o firmada (sin mutar el objeto). */
@@ -71,9 +103,11 @@ async function resolveDocumentoS3Key(documento, nroSolicitud) {
   const sanitizedNombre = documento.nombreDocumento;
   const altSanitizedNombre =
     documento.nombreDocumento?.replace(/\//g, '_') || 'archivo_desconocido';
+  const slugNombre = slugifyDocumentoNombre(documento.nombreDocumento);
   const prefixes = [
     `mongo-backup/${sanitizedNombre}_${nroSolicitud || 'tramite_desconocido'}`,
     `mongo-backup/${altSanitizedNombre}_${nroSolicitud || 'tramite_desconocido'}`,
+    `mongo-backup/${slugNombre}_${nroSolicitud || 'tramite_desconocido'}`,
   ];
 
   for (const prefix of prefixes) {
@@ -91,13 +125,16 @@ async function resolveDocumentoS3Key(documento, nroSolicitud) {
 }
 
 /**
- * Reserva nro de trámite y firma URLs PUT a S3.
+ * Reserva nro de trámite (salvo que ya venga nroSolicitud) y firma URLs PUT a S3.
  * El navegador sube los binarios directo a S3 (no pasan por la RAM del dyno).
  *
- * CORS del bucket (requerido para el PUT desde el browser), ejemplo:
- * AllowedOrigins: https://haciendavgesell.gob.ar
- * AllowedMethods: PUT, GET, HEAD
+ * CORS del bucket `haciendagesell` (requerido para el PUT desde el browser):
+ * AllowedOrigins: https://haciendavgesell.gob.ar, https://www.haciendavgesell.gob.ar
+ *   (y el front de Heroku si sigue en uso)
+ * AllowedMethods: PUT, GET, HEAD, POST
  * AllowedHeaders: Content-Type, *
+ * ExposeHeaders: ETag
+ * Si CORS no cubre el origen, el front cae a POST /habilitaciones/upload-proxy.
  */
 exports.presignDocumentos = async function (req, res) {
   try {
@@ -108,45 +145,98 @@ exports.presignDocumentos = async function (req, res) {
       });
     }
 
-    const nroTramite = await TicketController.getCurrent();
-    if (nroTramite == null || typeof nroTramite === 'string') {
-      return res.status(500).json({
-        message: 'No se pudo reservar el número de trámite.',
-      });
+    let nroTramite;
+    const existingNro = req.body.nroSolicitud;
+    if (existingNro != null && existingNro !== '') {
+      nroTramite = Number(existingNro);
+      if (!Number.isFinite(nroTramite)) {
+        return res.status(400).json({
+          message: 'nroSolicitud inválido.',
+        });
+      }
+    } else {
+      nroTramite = await TicketController.getCurrent();
+      if (nroTramite == null || typeof nroTramite === 'string') {
+        return res.status(500).json({
+          message: 'No se pudo reservar el número de trámite.',
+        });
+      }
     }
 
-    const uploads = files.map((file) => {
-      const nombreDocumento = file.nombreDocumento;
-      const contentType = file.contentType || 'application/octet-stream';
-      if (!nombreDocumento) {
-        throw new Error('Cada archivo requiere nombreDocumento.');
-      }
-
-      const extension = extensionFromContentType(contentType);
-      const key = `mongo-backup/${nombreDocumento}_${nroTramite}.${extension}`;
-      const uploadUrl = s3.getSignedUrl('putObject', {
-        Bucket: BUCKET,
-        Key: key,
-        ContentType: contentType,
-        Expires: 15 * 60,
-      });
-
-      return {
-        nombreDocumento,
-        contentType,
-        key,
-        uploadUrl,
-        url: publicObjectUrl(key),
-      };
-    });
+    const uploads = mapUploads(files, nroTramite);
 
     return res.status(200).json({
       data: { nroTramite, uploads },
     });
   } catch (e) {
+    console.error('Error presign documentos:', e);
     return res.status(400).json({
       message: e.message,
     });
+  }
+};
+
+/**
+ * Fallback si el PUT directo a S3 falla (CORS, 403, red).
+ * Recibe UN archivo binario (máx. 15 MB). No usa base64.
+ */
+exports.uploadProxy = async function (req, res) {
+  try {
+    const nroSolicitud = req.headers['x-nro-solicitud'];
+    const nombreHeader = req.headers['x-nombre-documento'] || '';
+    const keyHeader = req.headers['x-s3-key'] || '';
+    let nombreDocumento = String(nombreHeader);
+    let keyFromClient = String(keyHeader);
+    try {
+      nombreDocumento = decodeURIComponent(nombreDocumento);
+    } catch (_) {
+      /* header ya decodificado */
+    }
+    try {
+      keyFromClient = decodeURIComponent(keyFromClient);
+    } catch (_) {
+      /* header ya decodificado */
+    }
+
+    const contentType = normalizeContentType(
+      req.headers['x-content-type'] || req.headers['content-type']
+    );
+    const body = req.body;
+
+    if (!nroSolicitud || !nombreDocumento) {
+      return res.status(400).json({
+        message: 'Faltan x-nro-solicitud o x-nombre-documento.',
+      });
+    }
+    if (!body || !Buffer.isBuffer(body) || body.length === 0) {
+      return res.status(400).json({ message: 'Archivo vacío.' });
+    }
+    if (body.length > MAX_UPLOAD_BYTES) {
+      return res.status(413).json({ message: 'El archivo supera el límite permitido.' });
+    }
+
+    const key = keyFromClient
+      ? keyFromClient
+      : buildDocumentoKey(nombreDocumento, nroSolicitud, contentType);
+    if (!isSafeMongoBackupKey(key)) {
+      return res.status(400).json({ message: 'Key S3 inválida.' });
+    }
+
+    await s3
+      .upload({
+        Bucket: BUCKET,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      })
+      .promise();
+
+    return res.status(200).json({
+      data: { key, url: publicObjectUrl(key) },
+    });
+  } catch (e) {
+    console.error('Error upload-proxy:', e);
+    return res.status(500).json({ message: 'No se pudo subir el archivo.' });
   }
 };
 
@@ -188,23 +278,39 @@ exports.add = async function (req, res) {
       });
     }
 
-    formData.nroSolicitud = nroTramite;
+    formData.nroSolicitud = Number(nroTramite);
+    const nroLegajo = toNumberOrUndefined(formData.nroLegajo);
+    if (nroLegajo === undefined) {
+      delete formData.nroLegajo;
+    } else {
+      formData.nroLegajo = nroLegajo;
+    }
 
-    // Sanitizar serviciosHoteleria: el front puede mandar `id` de UI que Mongoose
-    // interpreta como `_id` y falla el cast a ObjectId ("1", "2", ...).
-    if (formData.inmueble && Array.isArray(formData.inmueble.serviciosHoteleria)) {
-      formData.inmueble.serviciosHoteleria = formData.inmueble.serviciosHoteleria.map(
-        ({ servicio, value }) => ({ servicio, value })
-      );
+    if (formData.solicitante) {
+      const cuit = toNumberOrUndefined(formData.solicitante.cuit);
+      const telefono = toNumberOrUndefined(formData.solicitante.telefono);
+      if (cuit !== undefined) formData.solicitante.cuit = cuit;
+      if (telefono !== undefined) formData.solicitante.telefono = telefono;
+    }
+
+    if (formData.inmueble) {
+      const nro = toNumberOrUndefined(formData.inmueble.nro);
+      if (nro !== undefined) formData.inmueble.nro = nro;
+      if (Array.isArray(formData.inmueble.serviciosHoteleria)) {
+        formData.inmueble.serviciosHoteleria = formData.inmueble.serviciosHoteleria.map(
+          ({ servicio, value }) => ({ servicio, value })
+        );
+      }
     }
 
     await HabilitacionService.create(formData);
 
     return res.status(201).json({
       message: 'Habilitación creada con éxito.',
-      data: nroTramite,
+      data: formData.nroSolicitud,
     });
   } catch (e) {
+    console.error('Error creando habilitación:', e);
     return res.status(400).json({
       message: e.message,
     });
