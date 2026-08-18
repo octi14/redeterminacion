@@ -18,8 +18,4 @@ module.exports = {
   PROVINCIA_NET_API_KEY: process.env.PROVINCIA_NET_API_KEY,
   PROVINCIA_NET_SERVICE_CODE:
     process.env.PROVINCIA_NET_SERVICE_CODE || "NETPAGOS0001",
-  /** Barcode real/válido para el fixture de homologación (PN valida la barra). */
-  PROVINCIA_NET_HOMOLOG_BARCODE: process.env.PROVINCIA_NET_HOMOLOG_BARCODE || "",
-  PROVINCIA_NET_HOMOLOG_AMOUNT:
-    process.env.PROVINCIA_NET_HOMOLOG_AMOUNT || "1000.00",
 };

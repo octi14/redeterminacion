@@ -15,14 +15,6 @@ async function usuarioPrivilegiado(req) {
   return PRIVILEGED_ROLES.includes(role);
 }
 
-async function rolUsuario(req) {
-  if (!req.auth || !req.auth.sub) return "";
-  const user = await User.findById(req.auth.sub).select("admin").lean();
-  return String((user && user.admin) || "")
-    .trim()
-    .toLowerCase();
-}
-
 async function puedeAccederPagoUrbana(req) {
   if (await usuarioPrivilegiado(req)) return true;
   return DeudaPagoService.pagoTasaUrbanaPublicoHabilitado();
@@ -146,22 +138,10 @@ exports.createPreorder = async function createPreorder(req, res) {
       tipoTasa,
       itemIds,
       periodos,
-      useHomologacionFixture,
     } = req.body || {};
 
     if (!payer) {
       return res.status(400).json({ message: "Falta payer en el body." });
-    }
-
-    let fixturePermitido = false;
-    if (useHomologacionFixture === true) {
-      const rol = await rolUsuario(req);
-      if (rol !== "master") {
-        return res.status(403).json({
-          message: "El pago de prueba solo está disponible para usuarios master.",
-        });
-      }
-      fixturePermitido = true;
     }
 
     const data = await ProvinciaNetService.createPreorder({
@@ -171,7 +151,6 @@ exports.createPreorder = async function createPreorder(req, res) {
       tipoTasa,
       itemIds,
       periodos,
-      useHomologacionFixture: fixturePermitido,
     });
 
     return res.status(201).json({ data });

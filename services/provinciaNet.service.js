@@ -47,30 +47,6 @@ function normalizePayments(payments) {
   }));
 }
 
-/** Fixture para homologación. Requiere PROVINCIA_NET_HOMOLOG_BARCODE. */
-function buildHomologacionFixture(tipoTasa = "URBANA") {
-  const barcode = String(config.PROVINCIA_NET_HOMOLOG_BARCODE || "").trim();
-  if (!barcode || /^0+$/.test(barcode)) {
-    const err = new Error(
-      "Falta un código de barras válido para el pago de prueba. Configurá PROVINCIA_NET_HOMOLOG_BARCODE en el .env (una barra real o la que indique Provincia NET)."
-    );
-    err.status = 400;
-    throw err;
-  }
-  const detail =
-    tipoTasa === "AUTOMOTORES"
-      ? "Municipalidad de Villa Gesell. Tasa Automotor (homologación)"
-      : "Municipalidad de Villa Gesell. Tasa por Servicios Urbanos";
-  return [
-    {
-      amount: amountToString(config.PROVINCIA_NET_HOMOLOG_AMOUNT || "1000.00"),
-      detail,
-      barcode,
-      service: config.PROVINCIA_NET_SERVICE_CODE,
-    },
-  ];
-}
-
 function sumAmounts(payments) {
   const total = payments.reduce((acc, p) => acc + Number(p.amount), 0);
   return amountToString(total);
@@ -146,23 +122,19 @@ exports.createPreorder = async function createPreorder({
   tipoTasa,
   itemIds,
   periodos,
-  useHomologacionFixture,
 } = {}) {
   const normalizedPayer = normalizePayer(payer);
   const tipo = DeudaPagoService.normalizarTipoTasa(tipoTasa || "URBANA");
 
-  const wantsFixture = useHomologacionFixture === true;
   const hasExplicitPayments = Array.isArray(payments) && payments.length > 0;
 
   let paymentItems;
   let resolvedTipo = tipo;
   let resolvedClave = objetoClave || null;
 
-  if (wantsFixture) {
-    paymentItems = buildHomologacionFixture(tipo);
-  } else if (hasExplicitPayments) {
+  if (hasExplicitPayments) {
     paymentItems = normalizePayments(payments);
-  } else if (useHomologacionFixture === false && objetoClave) {
+  } else if (objetoClave) {
     const built = await DeudaPagoService.construirPaymentsDesdeDeuda({
       tipoTasa: tipo,
       objetoClave,
@@ -173,8 +145,9 @@ exports.createPreorder = async function createPreorder({
     resolvedTipo = built.tipoTasa;
     resolvedClave = built.objetoClave;
   } else {
-    // Compat histórico: sin flag explícito false → fixture
-    paymentItems = buildHomologacionFixture(tipo);
+    const err = new Error("Falta objetoClave (partida o dominio) o payments.");
+    err.status = 400;
+    throw err;
   }
 
   const payload = {

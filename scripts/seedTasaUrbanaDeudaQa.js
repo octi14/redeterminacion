@@ -16,9 +16,7 @@ async function run() {
   await mongoose.connect(uri);
   await TasaUrbanaDeuda.deleteMany({ partida: PARTIDA });
 
-  const barcode =
-    String(config.PROVINCIA_NET_HOMOLOG_BARCODE || "").trim() ||
-    "000000000000000000000000000000000000000000000";
+  const barcode = "000000000000000000000000000000000000000000000";
 
   const year = now.getFullYear()
   const currentMonth = now.getMonth() + 1
