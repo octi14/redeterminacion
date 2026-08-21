@@ -28,6 +28,16 @@ const tasaUrbanaDeudaSchema = new Schema(
     },
     anio: { type: Number, required: true },
     cuota: { type: Number, required: true },
+    recibo: String,
+    debito: String,
+    mensajeDeuda: String,
+    mensajeBoleta: String,
+    codigosPago: {
+      pagoMisCuentas: String,
+      redLink: String,
+    },
+    /** [indiceConcepto, importeCentavos] alineado a CONCEPTOS_URBANA del importador */
+    conceptosCompactos: [[Number]],
     importeCentavos: { type: Number, required: true },
     vencimientos: { type: [vencimientoSchema], required: true },
     activa: { type: Boolean, default: true, index: true },

@@ -6,6 +6,29 @@ const MAX_OBSERVACIONES = 200;
 const FIRMA_URBANA = ["Titular", "Partida", "Catastro", "$1erVto", "F-1erVto", "CodBarra-1erVto"];
 const FIRMA_URBANA_MINIMA = ["Partida", "$1erVto", "CodBarra-1erVto"];
 
+/** Misma lista que tasaImportacion (boleta urbana / PDF futuro). */
+const CONCEPTOS_URBANA = [
+  ["Alumb", "Tasa de Alumbrado"],
+  ["Limp", "Tasa de Limpieza"],
+  ["CVP", "Tasa C.V.P."],
+  ["Bomber", "Tasa de Bomberos"],
+  ["Cement", "Tasa de Cementerio"],
+  ["Turist", "Tasa Turística"],
+  ["Segur", "Tasa de Seguridad"],
+  ["Salud", "Tasa de Salud"],
+  ["Resid", "Tasa de Residuos"],
+  ["SegPya", "Seguridad en Playas"],
+  ["AguaCor", "Tasa de Agua Corriente"],
+  ["Retro", "Retroactivo"],
+  ["O.Gas", "Obra de Gas"],
+  ["MqVial", "Mantenimiento vial"],
+  ["Obras24", "Obras"],
+  ["Hospital", "Obras Hospital"],
+  ["Bonif10$", "Bonificación B.C."],
+  ["Bonif20%", "Bonificación 1er vencimiento"],
+  ["Credito", "Créditos"],
+];
+
 function texto(value) {
   return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
 }
@@ -156,6 +179,12 @@ function construirDoc(row, rowNumber, resultado) {
     });
   }
 
+  const metros = Number(String(row.Const ?? "").replace(",", "."));
+  const conceptosCompactos = CONCEPTOS_URBANA.map(([codigo], index) => [
+    index,
+    importeCentavos(row[codigo]),
+  ]).filter((item) => item[1] != null && item[1] !== 0);
+
   return {
     partida,
     contribuyente: {
@@ -168,11 +197,20 @@ function construirDoc(row, rowNumber, resultado) {
       partida,
       catastro: texto(row.Catastro),
       parcela: texto(row.Parcela),
-      metrosConstruidos: Number(row.Const) || undefined,
+      metrosConstruidos: Number.isFinite(metros) ? metros : undefined,
       zona: texto(row.Zon),
     },
     anio: year,
     cuota: month,
+    recibo: texto(row.Recibo) || undefined,
+    debito: texto(row.Debito) || undefined,
+    mensajeDeuda: texto(row.DeudaTexto) || undefined,
+    mensajeBoleta: texto(row["TEXTO-2"] || row.TEXTO2) || undefined,
+    codigosPago: {
+      pagoMisCuentas: texto(row.Banelco) || undefined,
+      redLink: texto(row.RedLink) || undefined,
+    },
+    conceptosCompactos,
     importeCentavos: firstAmount,
     vencimientos,
     activa: true,
@@ -315,3 +353,5 @@ exports.importarArchivo = async function importarArchivo({ filePath, fileName } 
     observaciones: analisis.observaciones.slice(0, 40),
   };
 };
+
+exports.CONCEPTOS_URBANA = CONCEPTOS_URBANA;
