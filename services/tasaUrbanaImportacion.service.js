@@ -217,7 +217,7 @@ function construirDoc(row, rowNumber, resultado) {
   };
 }
 
-async function analizarYConstruir(filePath) {
+async function analizarYConstruir(filePath, { collectDocs = true, onBatch } = {}) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
   const worksheet = workbook.worksheets[0];
@@ -231,6 +231,7 @@ async function analizarYConstruir(filePath) {
     observacionesOmitidas: 0,
     periodos: [],
     docs: [],
+    cantidadImportadas: 0,
   };
 
   if (!worksheet) {
@@ -254,7 +255,21 @@ async function analizarYConstruir(filePath) {
   const seen = new Map();
   const partidas = new Set();
   const periods = new Set();
+  const periodKeys = new Set();
   const lastRow = worksheet.actualRowCount || worksheet.rowCount;
+  const BATCH_SIZE = 400;
+  let batch = [];
+
+  async function flushBatch() {
+    if (!batch.length || typeof onBatch !== "function") {
+      batch = [];
+      return;
+    }
+    const size = batch.length;
+    await onBatch(batch);
+    resultado.cantidadImportadas += size;
+    batch = [];
+  }
 
   for (let rowNumber = detected.headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
     const row = filaComoObjeto(worksheet.getRow(rowNumber), detected.headers);
@@ -278,18 +293,51 @@ async function analizarYConstruir(filePath) {
     seen.set(key, rowNumber);
     partidas.add(doc.partida);
     periods.add(`${String(doc.cuota).padStart(2, "0")}/${doc.anio}`);
-    resultado.docs.push(doc);
+    periodKeys.add(`${doc.anio}|${doc.cuota}`);
+
+    if (collectDocs) {
+      resultado.docs.push(doc);
+    }
+
+    if (typeof onBatch === "function") {
+      batch.push(doc);
+      if (batch.length >= BATCH_SIZE) {
+        await flushBatch();
+      }
+    }
   }
+
+  await flushBatch();
 
   resultado.cantidadObjetos = partidas.size;
   resultado.periodos = Array.from(periods).sort();
+  resultado.periodKeys = Array.from(periodKeys);
+  // Liberar referencia al workbook lo antes posible.
+  workbook.removeWorksheet(worksheet.id);
   return resultado;
 }
 
 exports.importarArchivo = async function importarArchivo({ filePath, fileName } = {}) {
-  const analisis = await analizarYConstruir(filePath);
+  const mongoose = require("mongoose");
+  const importBatchId = new mongoose.Types.ObjectId();
+  const periodKeys = new Set();
 
-  if (!analisis.docs.length) {
+  const analisis = await analizarYConstruir(filePath, {
+    collectDocs: false,
+    onBatch: async (batch) => {
+      for (const doc of batch) {
+        doc.importBatchId = importBatchId;
+        doc.activa = false;
+        periodKeys.add(`${doc.anio}|${doc.cuota}`);
+      }
+      await TasaUrbanaDeuda.insertMany(batch, { ordered: false });
+      console.log(
+        `Import urbana progreso: lote de ${batch.length} (batch ${importBatchId})`
+      );
+    },
+  });
+
+  if (!analisis.cantidadImportadas) {
     console.error(
       "Import urbana sin filas válidas:",
       analisis.observaciones.slice(0, 10).map((o) => `${o.columna}: ${o.mensaje}`)
@@ -315,20 +363,29 @@ exports.importarArchivo = async function importarArchivo({ filePath, fileName } 
     throw err;
   }
 
-  const periodos = [...new Set(analisis.docs.map((doc) => `${doc.anio}|${doc.cuota}`))];
+  const keys = periodKeys.size
+    ? Array.from(periodKeys)
+    : analisis.periodKeys || [];
   const filtroPeriodos = {
-    $or: periodos.map((key) => {
+    $or: keys.map((key) => {
       const [anio, cuota] = key.split("|").map(Number);
       return { anio, cuota };
     }),
   };
 
   const desactivadas = await TasaUrbanaDeuda.updateMany(
-    { activa: true, ...filtroPeriodos },
+    {
+      activa: true,
+      importBatchId: { $ne: importBatchId },
+      ...filtroPeriodos,
+    },
     { $set: { activa: false } }
   );
 
-  await TasaUrbanaDeuda.insertMany(analisis.docs, { ordered: true });
+  await TasaUrbanaDeuda.updateMany(
+    { importBatchId },
+    { $set: { activa: true } }
+  );
 
   try {
     await fs.promises.unlink(filePath);
@@ -337,7 +394,7 @@ exports.importarArchivo = async function importarArchivo({ filePath, fileName } 
   }
 
   console.log(
-    `Import urbana OK: ${analisis.docs.length} boletas, ${analisis.cantidadObjetos} partidas, archivo=${fileName || "-"}`
+    `Import urbana OK: ${analisis.cantidadImportadas} boletas, ${analisis.cantidadObjetos} partidas, archivo=${fileName || "-"}`
   );
 
   return {
@@ -345,7 +402,7 @@ exports.importarArchivo = async function importarArchivo({ filePath, fileName } 
     formato: analisis.formato,
     cantidadEntradas: analisis.cantidadEntradas,
     cantidadObjetos: analisis.cantidadObjetos,
-    cantidadImportadas: analisis.docs.length,
+    cantidadImportadas: analisis.cantidadImportadas,
     cantidadDesactivadas: desactivadas.modifiedCount || 0,
     cantidadErrores: analisis.cantidadErrores,
     cantidadAdvertencias: analisis.cantidadAdvertencias,

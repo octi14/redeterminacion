@@ -36,15 +36,25 @@ const app = express();
 
 app.use(cors());
 
-// El proxy de subida envía binario crudo: no parsear JSON en esa ruta.
+// El proxy de subida y el import XLSX envían binario crudo: no parsear JSON en esas rutas.
 app.use((req, res, next) => {
-  if (req.method === 'POST' && req.path === '/habilitaciones/upload-proxy') {
+  if (
+    req.method === "POST" &&
+    (req.path === "/habilitaciones/upload-proxy" ||
+      req.path === "/pagos/provincia-net/urbana/importar" ||
+      req.path.startsWith("/tasas/importaciones/"))
+  ) {
     return next();
   }
-  return express.json({ limit: '100mb' })(req, res, next);
+  return express.json({ limit: "100mb" })(req, res, next);
 });
 app.use((req, res, next) => {
-  if (req.method === 'POST' && req.path === '/habilitaciones/upload-proxy') {
+  if (
+    req.method === "POST" &&
+    (req.path === "/habilitaciones/upload-proxy" ||
+      req.path === "/pagos/provincia-net/urbana/importar" ||
+      req.path.startsWith("/tasas/importaciones/"))
+  ) {
     return next();
   }
   return express.urlencoded({ extended: true })(req, res, next);

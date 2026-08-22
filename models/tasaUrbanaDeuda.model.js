@@ -40,6 +40,8 @@ const tasaUrbanaDeudaSchema = new Schema(
     conceptosCompactos: [[Number]],
     importeCentavos: { type: Number, required: true },
     vencimientos: { type: [vencimientoSchema], required: true },
+    /** Identifica la corrida de importación para activar/desactivar por lotes. */
+    importBatchId: { type: Schema.Types.ObjectId, index: true },
     activa: { type: Boolean, default: true, index: true },
   },
   {
