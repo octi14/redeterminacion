@@ -1,6 +1,7 @@
 const ProvinciaNetService = require("../services/provinciaNet.service");
 const DeudaPagoService = require("../services/deudaPago.service");
 const TasaUrbanaImportacionService = require("../services/tasaUrbanaImportacion.service");
+const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
 const User = require("../models/user.model");
 const fs = require("fs");
 
@@ -27,6 +28,28 @@ function fileName(req) {
   } catch (_) {
     return raw;
   }
+}
+
+async function actualizarProgreso(importId, progreso) {
+  await TasaUrbanaImportacion.updateOne(
+    { _id: importId },
+    {
+      $set: {
+        progreso: {
+          etapa: progreso.etapa || "",
+          procesadas: progreso.procesadas || 0,
+          total: progreso.total || 0,
+          porcentaje: progreso.porcentaje || 0,
+          mensaje: progreso.mensaje || "",
+          error: progreso.error || "",
+          actualizadoAt: new Date(),
+        },
+        ...(progreso.importBatchId
+          ? { importBatchId: progreso.importBatchId }
+          : {}),
+      },
+    }
+  );
 }
 
 exports.configuracion = async function configuracion(_req, res) {
@@ -71,34 +94,177 @@ exports.actualizarConfiguracion = async function actualizarConfiguracion(req, re
 };
 
 exports.importarUrbana = async function importarUrbana(req, res) {
-  let archivo = req.archivoTemporal || null;
-  try {
-    if (!archivo) {
-      return res.status(400).json({ message: "Debe enviar un archivo XLSX." });
+  const archivo = req.archivoTemporal || null;
+  if (!archivo) {
+    return res.status(400).json({ message: "Debe enviar un archivo XLSX." });
+  }
+
+  const nombre = fileName(req);
+  const user = req.authenticatedUser;
+  const importacion = await TasaUrbanaImportacion.create({
+    nombreArchivo: nombre,
+    tamanoBytes: archivo.size || 0,
+    hashArchivo: archivo.hash || undefined,
+    estado: "procesando",
+    subidoPor: user
+      ? { id: user._id, username: user.username }
+      : undefined,
+    progreso: {
+      etapa: "en_cola",
+      procesadas: 0,
+      total: 0,
+      porcentaje: 5,
+      mensaje: "El archivo fue recibido y la importación comenzará en instantes.",
+      error: "",
+      actualizadoAt: new Date(),
+    },
+  });
+
+  res.status(202).json({
+    data: {
+      importId: String(importacion._id),
+      estado: "procesando",
+      fileName: nombre,
+    },
+  });
+
+  setImmediate(async () => {
+    try {
+      let lastProgressAt = 0;
+      const data = await TasaUrbanaImportacionService.importarArchivo({
+        filePath: archivo.path,
+        fileName: nombre,
+        onProgress: async (progreso) => {
+          const now = Date.now();
+          if (now - lastProgressAt < 1200 && progreso.etapa === "importando") return;
+          lastProgressAt = now;
+          await actualizarProgreso(importacion._id, progreso);
+        },
+      });
+
+      await TasaUrbanaImportacion.updateOne(
+        { _id: importacion._id },
+        {
+          $set: {
+            estado: "completada",
+            formato: data.formato,
+            periodos: data.periodos || [],
+            cantidadEntradas: data.cantidadEntradas || 0,
+            cantidadObjetos: data.cantidadObjetos || 0,
+            cantidadImportadas: data.cantidadImportadas || 0,
+            cantidadDesactivadas: data.cantidadDesactivadas || 0,
+            cantidadErrores: data.cantidadErrores || 0,
+            cantidadAdvertencias: data.cantidadAdvertencias || 0,
+            observaciones: data.observaciones || [],
+            importBatchId: data.importBatchId,
+            progreso: {
+              etapa: "completada",
+              procesadas: data.cantidadImportadas || 0,
+              total: data.cantidadImportadas || 0,
+              porcentaje: 100,
+              mensaje: "Importación completada.",
+              error: "",
+              actualizadoAt: new Date(),
+            },
+          },
+        }
+      );
+    } catch (e) {
+      console.error("provinciaNet.importarUrbana:", e.message);
+      const analisis = e.analisis || {};
+      await TasaUrbanaImportacion.updateOne(
+        { _id: importacion._id },
+        {
+          $set: {
+            estado: "fallida",
+            formato: analisis.formato,
+            periodos: analisis.periodos || [],
+            cantidadEntradas: analisis.cantidadEntradas || 0,
+            cantidadObjetos: analisis.cantidadObjetos || 0,
+            cantidadImportadas: 0,
+            cantidadErrores: analisis.cantidadErrores || 0,
+            cantidadAdvertencias: analisis.cantidadAdvertencias || 0,
+            observaciones: analisis.observaciones || [],
+            importBatchId: analisis.importBatchId,
+            progreso: {
+              etapa: "fallida",
+              porcentaje: 100,
+              mensaje: "La importación no pudo completarse.",
+              error: e.message || "Error desconocido",
+              actualizadoAt: new Date(),
+            },
+          },
+        }
+      );
+      await fs.promises.unlink(archivo.path).catch(() => {});
     }
-    const data = await TasaUrbanaImportacionService.importarArchivo({
-      filePath: archivo.path,
-      fileName: fileName(req),
+  });
+};
+
+exports.progresoImportUrbana = async function progresoImportUrbana(req, res) {
+  try {
+    const job = await TasaUrbanaImportacionService.obtenerProgreso(req.params.importId);
+    if (!job) {
+      return res.status(404).json({ message: "Importación no encontrada." });
+    }
+    const resultado =
+      job.estado === "completada" || job.estado === "fallida"
+        ? {
+            fileName: job.nombreArchivo,
+            formato: job.formato,
+            cantidadEntradas: job.cantidadEntradas,
+            cantidadObjetos: job.cantidadObjetos,
+            cantidadImportadas: job.cantidadImportadas,
+            cantidadDesactivadas: job.cantidadDesactivadas,
+            cantidadErrores: job.cantidadErrores,
+            cantidadAdvertencias: job.cantidadAdvertencias,
+            periodos: job.periodos,
+            observaciones: job.observaciones,
+          }
+        : undefined;
+    return res.status(200).json({
+      data: {
+        importId: String(job._id),
+        estado: job.estado,
+        fileName: job.nombreArchivo,
+        progreso: job.progreso,
+        resultado,
+      },
     });
-    archivo = null;
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+};
+
+exports.listarImportacionesUrbana = async function listarImportacionesUrbana(_req, res) {
+  try {
+    const data = await TasaUrbanaImportacionService.listarHistorial();
     return res.status(200).json({ data });
   } catch (e) {
-    console.error("provinciaNet.importarUrbana:", e.message);
-    if (e.analisis) {
-      console.error(
-        "Detalle import urbana:",
-        `entradas=${e.analisis.cantidadEntradas}`,
-        `errores=${e.analisis.cantidadErrores}`,
-        `formato=${e.analisis.formato}`,
-        e.analisis.observaciones?.slice(0, 5)
-      );
-    }
-    return res.status(e.status || 500).json({
-      message: e.message || "No se pudo importar el archivo de tasa urbana.",
-      data: e.analisis || undefined,
+    return res.status(500).json({ message: e.message });
+  }
+};
+
+exports.listarPeriodosUrbana = async function listarPeriodosUrbana(_req, res) {
+  try {
+    const data = await TasaUrbanaImportacionService.listarPeriodosCargados();
+    return res.status(200).json({ data });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+};
+
+exports.cambiarEstadoPeriodoUrbana = async function cambiarEstadoPeriodoUrbana(req, res) {
+  try {
+    const data = await TasaUrbanaImportacionService.cambiarEstadoPeriodo({
+      importBatchId: req.body?.importBatchId || req.params.importBatchId,
+      anio: req.body?.anio,
+      cuota: req.body?.cuota,
+      habilitar: req.body?.habilitar === true,
     });
-  } finally {
-    if (archivo) await fs.promises.unlink(archivo.path).catch(() => {});
+    return res.status(200).json({ data });
+  } catch (e) {
+    return res.status(e.status || 500).json({ message: e.message });
   }
 };
 
@@ -121,6 +287,7 @@ exports.getDeuda = async function getDeuda(req, res) {
     console.error("provinciaNet.getDeuda:", e.message);
     return res.status(e.status || 500).json({
       message: e.message || "No se pudo consultar la deuda.",
+      code: e.code || undefined,
     });
   }
 };

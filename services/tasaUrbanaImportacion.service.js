@@ -217,7 +217,23 @@ function construirDoc(row, rowNumber, resultado) {
   };
 }
 
-async function analizarYConstruir(filePath, { collectDocs = true, onBatch } = {}) {
+async function reportProgress(onProgress, patch) {
+  if (typeof onProgress === "function") {
+    try {
+      await onProgress(patch);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+}
+
+async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onProgress } = {}) {
+  await reportProgress(onProgress, {
+    etapa: "leyendo",
+    porcentaje: 5,
+    mensaje: "Leyendo el archivo Excel...",
+  });
+
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
   const worksheet = workbook.worksheets[0];
@@ -257,8 +273,17 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch } = {}
   const periods = new Set();
   const periodKeys = new Set();
   const lastRow = worksheet.actualRowCount || worksheet.rowCount;
+  const totalEstimado = Math.max(1, lastRow - detected.headerRow);
   const BATCH_SIZE = 400;
   let batch = [];
+
+  await reportProgress(onProgress, {
+    etapa: "importando",
+    procesadas: 0,
+    total: totalEstimado,
+    porcentaje: 10,
+    mensaje: `Procesando hasta ~${totalEstimado.toLocaleString("es-AR")} filas...`,
+  });
 
   async function flushBatch() {
     if (!batch.length || typeof onBatch !== "function") {
@@ -269,6 +294,14 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch } = {}
     await onBatch(batch);
     resultado.cantidadImportadas += size;
     batch = [];
+    const pct = 10 + Math.min(80, Math.floor((80 * resultado.cantidadImportadas) / totalEstimado));
+    await reportProgress(onProgress, {
+      etapa: "importando",
+      procesadas: resultado.cantidadImportadas,
+      total: totalEstimado,
+      porcentaje: pct,
+      mensaje: `Importadas ${resultado.cantidadImportadas.toLocaleString("es-AR")} boletas...`,
+    });
   }
 
   for (let rowNumber = detected.headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
@@ -317,13 +350,25 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch } = {}
   return resultado;
 }
 
-exports.importarArchivo = async function importarArchivo({ filePath, fileName } = {}) {
+exports.importarArchivo = async function importarArchivo({
+  filePath,
+  fileName,
+  onProgress,
+} = {}) {
   const mongoose = require("mongoose");
   const importBatchId = new mongoose.Types.ObjectId();
   const periodKeys = new Set();
 
+  await reportProgress(onProgress, {
+    etapa: "iniciando",
+    porcentaje: 3,
+    mensaje: "Preparando la importación...",
+    importBatchId: String(importBatchId),
+  });
+
   const analisis = await analizarYConstruir(filePath, {
     collectDocs: false,
+    onProgress,
     onBatch: async (batch) => {
       for (const doc of batch) {
         doc.importBatchId = importBatchId;
@@ -359,9 +404,18 @@ exports.importarArchivo = async function importarArchivo({ filePath, fileName } 
       periodos: analisis.periodos,
       observaciones: analisis.observaciones.slice(0, 80),
       observacionesOmitidas: analisis.observacionesOmitidas,
+      importBatchId,
     };
     throw err;
   }
+
+  await reportProgress(onProgress, {
+    etapa: "activando",
+    procesadas: analisis.cantidadImportadas,
+    total: analisis.cantidadImportadas,
+    porcentaje: 92,
+    mensaje: "Activando períodos importados...",
+  });
 
   const keys = periodKeys.size
     ? Array.from(periodKeys)
@@ -408,6 +462,129 @@ exports.importarArchivo = async function importarArchivo({ filePath, fileName } 
     cantidadAdvertencias: analisis.cantidadAdvertencias,
     periodos: analisis.periodos,
     observaciones: analisis.observaciones.slice(0, 40),
+    importBatchId,
+  };
+};
+
+exports.listarHistorial = async function listarHistorial() {
+  const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
+  return TasaUrbanaImportacion.find()
+    .sort({ createdAt: -1 })
+    .limit(200)
+    .lean();
+};
+
+exports.obtenerProgreso = async function obtenerProgreso(importId) {
+  const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
+  return TasaUrbanaImportacion.findById(importId).lean();
+};
+
+exports.listarPeriodosCargados = async function listarPeriodosCargados() {
+  const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
+  return TasaUrbanaDeuda.aggregate([
+    {
+      $group: {
+        _id: { importBatchId: "$importBatchId", anio: "$anio", cuota: "$cuota" },
+        cantidadEntradas: { $sum: 1 },
+        cantidadActivas: { $sum: { $cond: ["$activa", 1, 0] } },
+        actualizadoAt: { $max: "$updatedAt" },
+      },
+    },
+    {
+      $lookup: {
+        from: TasaUrbanaImportacion.collection.name,
+        localField: "_id.importBatchId",
+        foreignField: "importBatchId",
+        as: "importacion",
+      },
+    },
+    {
+      $addFields: {
+        importacion: { $arrayElemAt: ["$importacion", 0] },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        importBatchId: "$_id.importBatchId",
+        importacionId: "$importacion._id",
+        anio: "$_id.anio",
+        cuota: "$_id.cuota",
+        periodo: {
+          $concat: [
+            {
+              $cond: [{ $lt: ["$_id.cuota", 10] }, "0", ""],
+            },
+            { $toString: "$_id.cuota" },
+            "/",
+            { $toString: "$_id.anio" },
+          ],
+        },
+        cantidadEntradas: 1,
+        habilitado: { $gt: ["$cantidadActivas", 0] },
+        actualizadoAt: 1,
+        nombreArchivo: {
+          $ifNull: ["$importacion.nombreArchivo", "Carga sin nombre"],
+        },
+        estadoImportacion: {
+          $ifNull: ["$importacion.estado", "completada"],
+        },
+        publicadoAt: {
+          $ifNull: ["$importacion.updatedAt", "$actualizadoAt"],
+        },
+      },
+    },
+    { $sort: { anio: -1, cuota: 1, habilitado: -1, publicadoAt: -1 } },
+  ]);
+};
+
+exports.cambiarEstadoPeriodo = async function cambiarEstadoPeriodo({
+  importBatchId,
+  anio,
+  cuota,
+  habilitar,
+}) {
+  const anioNum = Number(anio);
+  const cuotaNum = Number(cuota);
+  if (!importBatchId || !anioNum || !cuotaNum) {
+    const err = new Error("Faltan importBatchId, anio o cuota.");
+    err.status = 400;
+    throw err;
+  }
+
+  const filtro = {
+    importBatchId,
+    anio: anioNum,
+    cuota: cuotaNum,
+  };
+  const objetivo = await TasaUrbanaDeuda.countDocuments(filtro);
+  if (!objetivo) {
+    const err = new Error("No hay boletas para ese período en la carga indicada.");
+    err.status = 404;
+    throw err;
+  }
+
+  if (habilitar) {
+    await TasaUrbanaDeuda.updateMany(
+      {
+        anio: anioNum,
+        cuota: cuotaNum,
+        activa: true,
+        importBatchId: { $ne: importBatchId },
+      },
+      { $set: { activa: false } }
+    );
+    await TasaUrbanaDeuda.updateMany(filtro, { $set: { activa: true } });
+  } else {
+    await TasaUrbanaDeuda.updateMany(filtro, { $set: { activa: false } });
+  }
+
+  return {
+    importBatchId,
+    anio: anioNum,
+    cuota: cuotaNum,
+    periodo: `${String(cuotaNum).padStart(2, "0")}/${anioNum}`,
+    habilitado: habilitar === true,
   };
 };
 

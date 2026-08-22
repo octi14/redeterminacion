@@ -7,11 +7,33 @@ const router = express.Router();
 
 router.get("/configuracion", Controller.configuracion);
 router.put("/configuracion", Controller.actualizarConfiguracion);
+// xlsxTemporal primero: si auth hace await antes de leer el body, el stream
+// se pierde y el request queda pending para siempre.
 router.post(
   "/urbana/importar",
-  requirePagoUrbanaAdmin,
   xlsxTemporal,
+  requirePagoUrbanaAdmin,
   Controller.importarUrbana
+);
+router.get(
+  "/urbana/importar/:importId/progreso",
+  requirePagoUrbanaAdmin,
+  Controller.progresoImportUrbana
+);
+router.get(
+  "/urbana/importaciones",
+  requirePagoUrbanaAdmin,
+  Controller.listarImportacionesUrbana
+);
+router.get(
+  "/urbana/periodos",
+  requirePagoUrbanaAdmin,
+  Controller.listarPeriodosUrbana
+);
+router.put(
+  "/urbana/periodos/estado",
+  requirePagoUrbanaAdmin,
+  Controller.cambiarEstadoPeriodoUrbana
 );
 router.get("/deuda", Controller.getDeuda);
 router.post("/preorder", Controller.createPreorder);

@@ -128,8 +128,14 @@ async function resolverUrbana(partida) {
     .lean();
 
   if (!docs.length) {
-    const err = new Error("No encontramos deuda activa para esa partida.");
+    const existe = await TasaUrbanaDeuda.exists({ partida: clave });
+    const err = new Error(
+      existe
+        ? "La partida existe, pero no tiene deuda activa para abonar online."
+        : "No encontramos esa partida en nuestros registros."
+    );
     err.status = 404;
+    err.code = existe ? "SIN_DEUDA" : "CUENTA_NO_ENCONTRADA";
     throw err;
   }
 
@@ -179,8 +185,17 @@ async function resolverAutomotor(dominio) {
     .lean();
 
   if (!boletas.length) {
-    const err = new Error("No encontramos boletas activas para ese dominio.");
+    const existe = await TasaBoleta.exists({
+      tipoTasa: TIPOS.AUTOMOTORES,
+      objetoClave: clave,
+    });
+    const err = new Error(
+      existe
+        ? "El dominio existe, pero no tiene deuda activa para abonar online."
+        : "No encontramos ese dominio en nuestros registros."
+    );
     err.status = 404;
+    err.code = existe ? "SIN_DEUDA" : "CUENTA_NO_ENCONTRADA";
     throw err;
   }
 
