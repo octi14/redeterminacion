@@ -473,9 +473,30 @@ exports.listarHistorial = async function listarHistorial() {
     .lean();
 };
 
+const IMPORT_STALE_MS = 8 * 60 * 1000;
+
 exports.obtenerProgreso = async function obtenerProgreso(importId) {
   const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
-  return TasaUrbanaImportacion.findById(importId).lean();
+  const job = await TasaUrbanaImportacion.findById(importId);
+  if (!job) return null;
+  const actualizadoAt = job.progreso && job.progreso.actualizadoAt;
+  const stale =
+    job.estado === "procesando" &&
+    actualizadoAt &&
+    Date.now() - new Date(actualizadoAt).getTime() > IMPORT_STALE_MS;
+  if (stale) {
+    job.estado = "fallida";
+    job.progreso = {
+      ...(job.progreso && job.progreso.toObject ? job.progreso.toObject() : job.progreso || {}),
+      etapa: "fallida",
+      porcentaje: 100,
+      mensaje: "La importación se interrumpió: no hubo avance durante varios minutos.",
+      error: "timeout",
+      actualizadoAt: new Date(),
+    };
+    await job.save();
+  }
+  return job.toObject();
 };
 
 exports.listarPeriodosCargados = async function listarPeriodosCargados() {
