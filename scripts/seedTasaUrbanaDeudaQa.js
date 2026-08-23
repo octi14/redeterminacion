@@ -36,7 +36,6 @@ async function run() {
         codigoPostal: "7165",
       },
       objeto: {
-        partida: PARTIDA,
         catastro: "CAT-QA-1",
         parcela: "P-1",
         metrosConstruidos: 120,
@@ -82,7 +81,6 @@ async function run() {
         codigoPostal: "7165",
       },
       objeto: {
-        partida: PARTIDA,
         catastro: "CAT-QA-1",
         parcela: "P-1",
         metrosConstruidos: 120,

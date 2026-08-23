@@ -12,7 +12,7 @@ const vencimientoSchema = new Schema(
 
 const tasaUrbanaDeudaSchema = new Schema(
   {
-    partida: { type: String, required: true, index: true },
+    partida: { type: String, required: true },
     contribuyente: {
       nombre: String,
       domicilio: String,
@@ -20,7 +20,6 @@ const tasaUrbanaDeudaSchema = new Schema(
       codigoPostal: String,
     },
     objeto: {
-      partida: String,
       catastro: String,
       parcela: String,
       metrosConstruidos: Number,
@@ -41,11 +40,11 @@ const tasaUrbanaDeudaSchema = new Schema(
     importeCentavos: { type: Number, required: true },
     vencimientos: { type: [vencimientoSchema], required: true },
     /** Identifica la corrida de importación para activar/desactivar por lotes. */
-    importBatchId: { type: Schema.Types.ObjectId, index: true },
-    activa: { type: Boolean, default: true, index: true },
+    importBatchId: { type: Schema.Types.ObjectId },
+    activa: { type: Boolean, default: true },
   },
   {
-    timestamps: true,
+    timestamps: false,
     versionKey: false,
     collection: "tasaurbanadeudas",
   }

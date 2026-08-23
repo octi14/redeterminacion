@@ -194,7 +194,6 @@ function construirDoc(row, rowNumber, resultado) {
       codigoPostal: texto(row["C.P."] || row.CP),
     },
     objeto: {
-      partida,
       catastro: texto(row.Catastro),
       parcela: texto(row.Parcela),
       metrosConstruidos: Number.isFinite(metros) ? metros : undefined,
