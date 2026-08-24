@@ -71,7 +71,7 @@ function valorCelda(cell) {
   return cell.value == null ? "" : cell.value;
 }
 
-function filaComoObjeto(row, headers) {
+function filaComoObjetoDesdeValores(values, headers) {
   const result = {};
   headers.forEach((header, index) => {
     if (!header) return;
@@ -81,9 +81,24 @@ function filaComoObjeto(row, headers) {
       key = `${header}_${suffix}`;
       suffix += 1;
     }
-    result[key] = valorCelda(row.getCell(index + 1));
+    result[key] = valorCelda({ value: values[index + 1] });
   });
   return result;
+}
+
+function encabezadosDeFila(row) {
+  const values = row.values || [];
+  return values.slice(1).map((value) => texto(valorCelda({ value })));
+}
+
+function detectarCabeceraEnEncabezados(headers) {
+  if (FIRMA_URBANA.every((header) => headers.includes(header))) {
+    return { headers, nivel: "completo" };
+  }
+  if (FIRMA_URBANA_MINIMA.every((header) => headers.includes(header))) {
+    return { headers, nivel: "minimo" };
+  }
+  return null;
 }
 
 function agregarObservacion(resultado, tipo, fila, columna, mensaje) {
@@ -94,19 +109,6 @@ function agregarObservacion(resultado, tipo, fila, columna, mensaje) {
   } else {
     resultado.observacionesOmitidas += 1;
   }
-}
-
-function detectarCabecera(worksheet) {
-  for (let rowNumber = 1; rowNumber <= Math.min(15, worksheet.rowCount); rowNumber += 1) {
-    const headers = worksheet.getRow(rowNumber).values.slice(1).map(texto);
-    if (FIRMA_URBANA.every((header) => headers.includes(header))) {
-      return { headerRow: rowNumber, headers, nivel: "completo" };
-    }
-    if (FIRMA_URBANA_MINIMA.every((header) => headers.includes(header))) {
-      return { headerRow: rowNumber, headers, nivel: "minimo" };
-    }
-  }
-  return null;
 }
 
 function fechaDefault(anio, mes, dia = 15) {
@@ -230,48 +232,7 @@ function ramMb() {
   return Math.round(process.memoryUsage().rss / (1024 * 1024));
 }
 
-async function leerWorkbook(filePath, onProgress) {
-  const started = Date.now();
-  const stat = await fs.promises.stat(filePath).catch(() => null);
-  const sizeMb = stat ? (stat.size / 1024 / 1024).toFixed(1) : "?";
-  console.log(`Import urbana: leyendo XLSX (${sizeMb} MB, ${ramMb()} MB RAM)`);
-  await reportProgress(onProgress, {
-    etapa: "leyendo",
-    porcentaje: 5,
-    mensaje: `Leyendo el Excel (${sizeMb} MB). Se carga entero en memoria antes de guardar boletas.`,
-  });
-  let ticking = false;
-  const timer = setInterval(() => {
-    if (ticking) return;
-    ticking = true;
-    const s = Math.round((Date.now() - started) / 1000);
-    const msg = `Leyendo el Excel (${sizeMb} MB)… ${s} s, ${ramMb()} MB RAM. Todavía no se guardaron boletas.`;
-    console.log(`Import urbana: ${msg}`);
-    reportProgress(onProgress, { etapa: "leyendo", porcentaje: 5, mensaje: msg }).finally(() => {
-      ticking = false;
-    });
-  }, 10000);
-  try {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(filePath);
-    const elapsed = Math.round((Date.now() - started) / 1000);
-    const worksheet = workbook.worksheets[0];
-    const rows = worksheet ? worksheet.actualRowCount || worksheet.rowCount || 0 : 0;
-    console.log(`Import urbana: Excel leído en ${elapsed}s (~${rows} filas, ${ramMb()} MB RAM)`);
-    await reportProgress(onProgress, {
-      etapa: "leyendo",
-      porcentaje: 8,
-      mensaje: `Excel leído en ${elapsed} s (~${Number(rows).toLocaleString("es-AR")} filas). Empieza el guardado…`,
-    });
-    return workbook;
-  } finally {
-    clearInterval(timer);
-  }
-}
-
 async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onProgress } = {}) {
-  const workbook = await leerWorkbook(filePath, onProgress);
-  const worksheet = workbook.worksheets[0];
   const resultado = {
     formato: "desconocido",
     cantidadEntradas: 0,
@@ -285,12 +246,111 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onPro
     cantidadImportadas: 0,
   };
 
-  if (!worksheet) {
+  const stat = await fs.promises.stat(filePath).catch(() => null);
+  const sizeMb = stat ? (stat.size / 1024 / 1024).toFixed(1) : "?";
+  const started = Date.now();
+  console.log(`Import urbana: stream XLSX (${sizeMb} MB, ${ramMb()} MB RAM)`);
+  await reportProgress(onProgress, {
+    etapa: "leyendo",
+    porcentaje: 5,
+    mensaje: `Leyendo el Excel en streaming (${sizeMb} MB). Las boletas se guardan de a lotes.`,
+  });
+
+  const seen = new Map();
+  const partidas = new Set();
+  const periods = new Set();
+  const periodKeys = new Set();
+  const BATCH_SIZE = 400;
+  let batch = [];
+  let detected = null;
+  let hayHoja = false;
+  let filasLeidas = 0;
+
+  async function flushBatch() {
+    if (!batch.length || typeof onBatch !== "function") {
+      batch = [];
+      return;
+    }
+    const size = batch.length;
+    await onBatch(batch);
+    resultado.cantidadImportadas += size;
+    batch = [];
+    const pct = 10 + Math.min(80, Math.floor((80 * resultado.cantidadImportadas) / 110000));
+    await reportProgress(onProgress, {
+      etapa: "importando",
+      procesadas: resultado.cantidadImportadas,
+      total: 0,
+      porcentaje: pct,
+      mensaje: `Importadas ${resultado.cantidadImportadas.toLocaleString("es-AR")} boletas… ${ramMb()} MB RAM`,
+    });
+  }
+
+  const reader = new ExcelJS.stream.xlsx.WorkbookReader(fs.createReadStream(filePath), {
+    entries: "emit",
+    sharedStrings: "cache",
+    hyperlinks: "ignore",
+    styles: "ignore",
+    worksheets: "emit",
+  });
+
+  let primeraHoja = true;
+  for await (const worksheetReader of reader) {
+    if (!primeraHoja) continue;
+    primeraHoja = false;
+    hayHoja = true;
+    for await (const row of worksheetReader) {
+      const rowNumber = row.number || 0;
+      filasLeidas += 1;
+      if (!detected) {
+        if (rowNumber > 15) break;
+        detected = detectarCabeceraEnEncabezados(encabezadosDeFila(row));
+        if (detected) {
+          resultado.formato = `urbana-${detected.nivel}`;
+          console.log(`Import urbana: cabecera en fila ${rowNumber}, ${ramMb()} MB RAM`);
+        }
+        continue;
+      }
+      const data = filaComoObjetoDesdeValores(row.values || [], detected.headers);
+      if (!Object.values(data).some((value) => texto(value))) continue;
+      resultado.cantidadEntradas += 1;
+
+      const doc = construirDoc(data, rowNumber, resultado);
+      if (!doc) continue;
+
+      const key = `${doc.partida}|${doc.anio}|${doc.cuota}`;
+      if (seen.has(key)) {
+        agregarObservacion(
+          resultado,
+          "advertencia",
+          rowNumber,
+          "Partida / período",
+          `Duplicado de la fila ${seen.get(key)}; se conserva la primera.`
+        );
+        continue;
+      }
+      seen.set(key, rowNumber);
+      partidas.add(doc.partida);
+      periods.add(`${String(doc.cuota).padStart(2, "0")}/${doc.anio}`);
+      periodKeys.add(`${doc.anio}|${doc.cuota}`);
+
+      if (collectDocs) resultado.docs.push(doc);
+      if (typeof onBatch === "function") {
+        batch.push(doc);
+        if (batch.length >= BATCH_SIZE) await flushBatch();
+      }
+
+      if (filasLeidas % 2000 === 0) {
+        console.log(
+          `Import urbana: fila ${rowNumber}, importadas ${resultado.cantidadImportadas}, ${ramMb()} MB RAM`
+        );
+      }
+    }
+  }
+
+  if (!hayHoja) {
     agregarObservacion(resultado, "error", null, "Archivo", "El archivo no contiene hojas.");
     return resultado;
   }
-
-  const detected = detectarCabecera(worksheet);
   if (!detected) {
     agregarObservacion(
       resultado,
@@ -302,86 +362,13 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onPro
     return resultado;
   }
 
-  resultado.formato = `urbana-${detected.nivel}`;
-  const seen = new Map();
-  const partidas = new Set();
-  const periods = new Set();
-  const periodKeys = new Set();
-  const lastRow = worksheet.actualRowCount || worksheet.rowCount;
-  const totalEstimado = Math.max(1, lastRow - detected.headerRow);
-  const BATCH_SIZE = 400;
-  let batch = [];
-
-  await reportProgress(onProgress, {
-    etapa: "importando",
-    procesadas: 0,
-    total: totalEstimado,
-    porcentaje: 10,
-    mensaje: `Procesando hasta ~${totalEstimado.toLocaleString("es-AR")} filas...`,
-  });
-
-  async function flushBatch() {
-    if (!batch.length || typeof onBatch !== "function") {
-      batch = [];
-      return;
-    }
-    const size = batch.length;
-    await onBatch(batch);
-    resultado.cantidadImportadas += size;
-    batch = [];
-    const pct = 10 + Math.min(80, Math.floor((80 * resultado.cantidadImportadas) / totalEstimado));
-    await reportProgress(onProgress, {
-      etapa: "importando",
-      procesadas: resultado.cantidadImportadas,
-      total: totalEstimado,
-      porcentaje: pct,
-      mensaje: `Importadas ${resultado.cantidadImportadas.toLocaleString("es-AR")} boletas...`,
-    });
-  }
-
-  for (let rowNumber = detected.headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
-    const row = filaComoObjeto(worksheet.getRow(rowNumber), detected.headers);
-    if (!Object.values(row).some((value) => texto(value))) continue;
-    resultado.cantidadEntradas += 1;
-
-    const doc = construirDoc(row, rowNumber, resultado);
-    if (!doc) continue;
-
-    const key = `${doc.partida}|${doc.anio}|${doc.cuota}`;
-    if (seen.has(key)) {
-      agregarObservacion(
-        resultado,
-        "advertencia",
-        rowNumber,
-        "Partida / período",
-        `Duplicado de la fila ${seen.get(key)}; se conserva la primera.`
-      );
-      continue;
-    }
-    seen.set(key, rowNumber);
-    partidas.add(doc.partida);
-    periods.add(`${String(doc.cuota).padStart(2, "0")}/${doc.anio}`);
-    periodKeys.add(`${doc.anio}|${doc.cuota}`);
-
-    if (collectDocs) {
-      resultado.docs.push(doc);
-    }
-
-    if (typeof onBatch === "function") {
-      batch.push(doc);
-      if (batch.length >= BATCH_SIZE) {
-        await flushBatch();
-      }
-    }
-  }
-
   await flushBatch();
-
   resultado.cantidadObjetos = partidas.size;
   resultado.periodos = Array.from(periods).sort();
   resultado.periodKeys = Array.from(periodKeys);
-  // Liberar referencia al workbook lo antes posible.
-  workbook.removeWorksheet(worksheet.id);
+  console.log(
+    `Import urbana: stream listo en ${Math.round((Date.now() - started) / 1000)}s, ${ramMb()} MB RAM`
+  );
   return resultado;
 }
 
