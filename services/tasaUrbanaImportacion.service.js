@@ -74,14 +74,42 @@ function valorCelda(cell) {
   return cell.value == null ? "" : cell.value;
 }
 
+function encabezado(value) {
+  return texto(value).replace(/[–—−]/g, "-");
+}
+
+function valorCodigo(value) {
+  if (value == null || value === "") return "";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Number.isInteger(value) ? String(value) : String(Math.round(value));
+  }
+  return texto(value);
+}
+
+function campo(row, ...nombres) {
+  for (const nombre of nombres) {
+    const value = valorCodigo(row[nombre]);
+    if (value) return value;
+  }
+  const keys = Object.keys(row || {});
+  for (const nombre of nombres) {
+    const needle = encabezado(nombre).toLowerCase();
+    const key = keys.find((item) => encabezado(item).toLowerCase() === needle);
+    const value = valorCodigo(key ? row[key] : "");
+    if (value) return value;
+  }
+  return "";
+}
+
 function filaComoObjetoDesdeValores(values, headers) {
   const result = {};
   headers.forEach((header, index) => {
-    if (!header) return;
-    let key = header;
+    const normalized = encabezado(header);
+    if (!normalized) return;
+    let key = normalized;
     let suffix = 1;
     while (Object.prototype.hasOwnProperty.call(result, key)) {
-      key = `${header}_${suffix}`;
+      key = `${normalized}_${suffix}`;
       suffix += 1;
     }
     result[key] = valorCelda({ value: values[index + 1] });
@@ -91,7 +119,7 @@ function filaComoObjetoDesdeValores(values, headers) {
 
 function encabezadosDeFila(row) {
   const values = row.values || [];
-  return values.slice(1).map((value) => texto(valorCelda({ value })));
+  return values.slice(1).map((value) => encabezado(valorCelda({ value })));
 }
 
 function detectarCabeceraEnEncabezados(headers) {
@@ -127,8 +155,8 @@ function construirDoc(row, rowNumber, resultado) {
   const secondAmount = importeCentavos(row["$2doVto"]);
   const firstDate = fecha(row["F-1erVto"]) || fechaDefault(year, month, 15);
   const secondDate = fecha(row["F-2doVto"]) || fechaDefault(year, month, 28);
-  const firstBarcode = texto(row["CodBarra-1erVto"]);
-  const secondBarcode = texto(row["CodBarra-2doVto"]);
+  const firstBarcode = campo(row, "CodBarra-1erVto", "CodBarra-1erVto", "Cod.Barra-1erVto");
+  const secondBarcode = campo(row, "CodBarra-2doVto", "CodBarra-2doVto", "Cod.Barra-2doVto");
 
   let ok = true;
   if (!partida || !/^[A-Z0-9]{1,16}$/.test(partida)) {
@@ -148,8 +176,13 @@ function construirDoc(row, rowNumber, resultado) {
     ok = false;
   }
   if (!firstBarcode) {
-    agregarObservacion(resultado, "error", rowNumber, "CodBarra-1erVto", "Falta el código de barras del 1er vencimiento.");
-    ok = false;
+    agregarObservacion(
+      resultado,
+      "advertencia",
+      rowNumber,
+      "CodBarra-1erVto",
+      "Sin código de barras del 1er vencimiento; se importa igual."
+    );
   }
 
   if (!texto(row.Titular)) {
@@ -172,7 +205,7 @@ function construirDoc(row, rowNumber, resultado) {
       orden: 1,
       fecha: firstDate,
       importeCentavos: firstAmount,
-      codigoBarra: firstBarcode,
+      codigoBarra: firstBarcode || "-",
     },
   ];
   if (secondBarcode && secondAmount != null && secondAmount >= 0) {
