@@ -1,6 +1,6 @@
 const fs = require("fs");
-const ExcelJS = require("exceljs");
 const TasaUrbanaDeuda = require("../models/tasaUrbanaDeuda.model");
+const { filasXlsx } = require("./xlsxFilasLivianas.service");
 
 const MAX_OBSERVACIONES = 200;
 const FIRMA_URBANA = ["Titular", "Partida", "Catastro", "$1erVto", "F-1erVto", "CodBarra-1erVto"];
@@ -52,6 +52,9 @@ function importeCentavos(value) {
 
 function fecha(value) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "number" && value > 20000 && value < 80000) {
+    return new Date(Date.UTC(1899, 11, 30) + value * 86400000);
+  }
   const match = texto(value).match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (!match) return null;
   const result = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
@@ -260,7 +263,7 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onPro
   const partidas = new Set();
   const periods = new Set();
   const periodKeys = new Set();
-  const BATCH_SIZE = 400;
+  const BATCH_SIZE = 200;
   let batch = [];
   let detected = null;
   let hayHoja = false;
@@ -285,65 +288,52 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onPro
     });
   }
 
-  const reader = new ExcelJS.stream.xlsx.WorkbookReader(fs.createReadStream(filePath), {
-    entries: "emit",
-    sharedStrings: "cache",
-    hyperlinks: "ignore",
-    styles: "ignore",
-    worksheets: "emit",
-  });
-
-  let primeraHoja = true;
-  for await (const worksheetReader of reader) {
-    if (!primeraHoja) continue;
-    primeraHoja = false;
-    hayHoja = true;
-    for await (const row of worksheetReader) {
-      const rowNumber = row.number || 0;
-      filasLeidas += 1;
-      if (!detected) {
-        if (rowNumber > 15) break;
-        detected = detectarCabeceraEnEncabezados(encabezadosDeFila(row));
-        if (detected) {
-          resultado.formato = `urbana-${detected.nivel}`;
-          console.log(`Import urbana: cabecera en fila ${rowNumber}, ${ramMb()} MB RAM`);
-        }
-        continue;
+  hayHoja = true;
+  for await (const row of filasXlsx(filePath)) {
+    const rowNumber = row.number || 0;
+    filasLeidas += 1;
+    if (!detected) {
+      if (rowNumber > 15) break;
+      detected = detectarCabeceraEnEncabezados(encabezadosDeFila(row));
+      if (detected) {
+        resultado.formato = `urbana-${detected.nivel}`;
+        console.log(`Import urbana: cabecera en fila ${rowNumber}, ${ramMb()} MB RAM`);
       }
-      const data = filaComoObjetoDesdeValores(row.values || [], detected.headers);
-      if (!Object.values(data).some((value) => texto(value))) continue;
-      resultado.cantidadEntradas += 1;
+      continue;
+    }
+    const data = filaComoObjetoDesdeValores(row.values || [], detected.headers);
+    if (!Object.values(data).some((value) => texto(value))) continue;
+    resultado.cantidadEntradas += 1;
 
-      const doc = construirDoc(data, rowNumber, resultado);
-      if (!doc) continue;
+    const doc = construirDoc(data, rowNumber, resultado);
+    if (!doc) continue;
 
-      const key = `${doc.partida}|${doc.anio}|${doc.cuota}`;
-      if (seen.has(key)) {
-        agregarObservacion(
-          resultado,
-          "advertencia",
-          rowNumber,
-          "Partida / período",
-          `Duplicado de la fila ${seen.get(key)}; se conserva la primera.`
-        );
-        continue;
-      }
-      seen.set(key, rowNumber);
-      partidas.add(doc.partida);
-      periods.add(`${String(doc.cuota).padStart(2, "0")}/${doc.anio}`);
-      periodKeys.add(`${doc.anio}|${doc.cuota}`);
+    const key = `${doc.partida}|${doc.anio}|${doc.cuota}`;
+    if (seen.has(key)) {
+      agregarObservacion(
+        resultado,
+        "advertencia",
+        rowNumber,
+        "Partida / período",
+        `Duplicado de la fila ${seen.get(key)}; se conserva la primera.`
+      );
+      continue;
+    }
+    seen.set(key, rowNumber);
+    partidas.add(doc.partida);
+    periods.add(`${String(doc.cuota).padStart(2, "0")}/${doc.anio}`);
+    periodKeys.add(`${doc.anio}|${doc.cuota}`);
 
-      if (collectDocs) resultado.docs.push(doc);
-      if (typeof onBatch === "function") {
-        batch.push(doc);
-        if (batch.length >= BATCH_SIZE) await flushBatch();
-      }
+    if (collectDocs) resultado.docs.push(doc);
+    if (typeof onBatch === "function") {
+      batch.push(doc);
+      if (batch.length >= BATCH_SIZE) await flushBatch();
+    }
 
-      if (filasLeidas % 2000 === 0) {
-        console.log(
-          `Import urbana: fila ${rowNumber}, importadas ${resultado.cantidadImportadas}, ${ramMb()} MB RAM`
-        );
-      }
+    if (filasLeidas % 2000 === 0) {
+      console.log(
+        `Import urbana: fila ${rowNumber}, importadas ${resultado.cantidadImportadas}, ${ramMb()} MB RAM`
+      );
     }
   }
 
