@@ -226,15 +226,51 @@ async function reportProgress(onProgress, patch) {
   }
 }
 
-async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onProgress } = {}) {
+function ramMb() {
+  return Math.round(process.memoryUsage().rss / (1024 * 1024));
+}
+
+async function leerWorkbook(filePath, onProgress) {
+  const started = Date.now();
+  const stat = await fs.promises.stat(filePath).catch(() => null);
+  const sizeMb = stat ? (stat.size / 1024 / 1024).toFixed(1) : "?";
+  console.log(`Import urbana: leyendo XLSX (${sizeMb} MB, ${ramMb()} MB RAM)`);
   await reportProgress(onProgress, {
     etapa: "leyendo",
     porcentaje: 5,
-    mensaje: "Leyendo el archivo Excel...",
+    mensaje: `Leyendo el Excel (${sizeMb} MB). Se carga entero en memoria antes de guardar boletas.`,
   });
+  let ticking = false;
+  const timer = setInterval(() => {
+    if (ticking) return;
+    ticking = true;
+    const s = Math.round((Date.now() - started) / 1000);
+    const msg = `Leyendo el Excel (${sizeMb} MB)… ${s} s, ${ramMb()} MB RAM. Todavía no se guardaron boletas.`;
+    console.log(`Import urbana: ${msg}`);
+    reportProgress(onProgress, { etapa: "leyendo", porcentaje: 5, mensaje: msg }).finally(() => {
+      ticking = false;
+    });
+  }, 10000);
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const elapsed = Math.round((Date.now() - started) / 1000);
+    const worksheet = workbook.worksheets[0];
+    const rows = worksheet ? worksheet.actualRowCount || worksheet.rowCount || 0 : 0;
+    console.log(`Import urbana: Excel leído en ${elapsed}s (~${rows} filas, ${ramMb()} MB RAM)`);
+    await reportProgress(onProgress, {
+      etapa: "leyendo",
+      porcentaje: 8,
+      mensaje: `Excel leído en ${elapsed} s (~${Number(rows).toLocaleString("es-AR")} filas). Empieza el guardado…`,
+    });
+    return workbook;
+  } finally {
+    clearInterval(timer);
+  }
+}
 
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(filePath);
+async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onProgress } = {}) {
+  const workbook = await leerWorkbook(filePath, onProgress);
   const worksheet = workbook.worksheets[0];
   const resultado = {
     formato: "desconocido",
@@ -376,7 +412,7 @@ exports.importarArchivo = async function importarArchivo({
       }
       await TasaUrbanaDeuda.insertMany(batch, { ordered: false });
       console.log(
-        `Import urbana progreso: lote de ${batch.length} (batch ${importBatchId})`
+        `Import urbana: lote ${batch.length} insertado, ${ramMb()} MB RAM (batch ${importBatchId})`
       );
     },
   });
@@ -473,30 +509,9 @@ exports.listarHistorial = async function listarHistorial() {
     .lean();
 };
 
-const IMPORT_STALE_MS = 8 * 60 * 1000;
-
 exports.obtenerProgreso = async function obtenerProgreso(importId) {
   const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
-  const job = await TasaUrbanaImportacion.findById(importId);
-  if (!job) return null;
-  const actualizadoAt = job.progreso && job.progreso.actualizadoAt;
-  const stale =
-    job.estado === "procesando" &&
-    actualizadoAt &&
-    Date.now() - new Date(actualizadoAt).getTime() > IMPORT_STALE_MS;
-  if (stale) {
-    job.estado = "fallida";
-    job.progreso = {
-      ...(job.progreso && job.progreso.toObject ? job.progreso.toObject() : job.progreso || {}),
-      etapa: "fallida",
-      porcentaje: 100,
-      mensaje: "La importación se interrumpió: no hubo avance durante varios minutos.",
-      error: "timeout",
-      actualizadoAt: new Date(),
-    };
-    await job.save();
-  }
-  return job.toObject();
+  return TasaUrbanaImportacion.findById(importId).lean();
 };
 
 exports.listarPeriodosCargados = async function listarPeriodosCargados() {
