@@ -1,6 +1,6 @@
 const fs = require("fs");
+const ExcelJS = require("exceljs");
 const TasaUrbanaDeuda = require("../models/tasaUrbanaDeuda.model");
-const { filasXlsx } = require("./xlsxFilasLivianas.service");
 
 const MAX_OBSERVACIONES = 200;
 const FIRMA_URBANA = ["Titular", "Partida", "Catastro", "$1erVto", "F-1erVto", "CodBarra-1erVto"];
@@ -268,6 +268,24 @@ function ramMb() {
   return Math.round(process.memoryUsage().rss / (1024 * 1024));
 }
 
+async function* filasExcel(filePath) {
+  const reader = new ExcelJS.stream.xlsx.WorkbookReader(fs.createReadStream(filePath), {
+    entries: "emit",
+    sharedStrings: "cache",
+    hyperlinks: "ignore",
+    styles: "ignore",
+    worksheets: "emit",
+  });
+  let primeraHoja = true;
+  for await (const worksheetReader of reader) {
+    if (!primeraHoja) continue;
+    primeraHoja = false;
+    for await (const row of worksheetReader) {
+      yield row;
+    }
+  }
+}
+
 async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onProgress } = {}) {
   const resultado = {
     formato: "desconocido",
@@ -322,7 +340,7 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onPro
   }
 
   hayHoja = true;
-  for await (const row of filasXlsx(filePath)) {
+  for await (const row of filasExcel(filePath)) {
     const rowNumber = row.number || 0;
     filasLeidas += 1;
     if (!detected) {
