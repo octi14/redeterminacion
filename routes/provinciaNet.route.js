@@ -26,6 +26,11 @@ router.get(
   Controller.listarImportacionesUrbana
 );
 router.get(
+  "/urbana/importaciones/:importId/original",
+  requirePagoUrbanaAdmin,
+  Controller.archivoOriginalUrbana
+);
+router.get(
   "/urbana/periodos",
   requirePagoUrbanaAdmin,
   Controller.listarPeriodosUrbana

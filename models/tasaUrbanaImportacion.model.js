@@ -44,6 +44,11 @@ const tasaUrbanaImportacionSchema = new Schema(
       error: { type: String },
       actualizadoAt: { type: Date },
     },
+    archivoOriginal: {
+      almacenado: { type: Boolean, default: false },
+      url: { type: String },
+      key: { type: String },
+    },
   },
   { timestamps: true, versionKey: false, collection: "tasaurbanaimportaciones" }
 );
