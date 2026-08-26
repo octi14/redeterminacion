@@ -15,7 +15,7 @@ const REQUERIDAS_URBANA = [
   "F-1erVto", "F-2doVto", "CodBarra-1erVto", "CodBarra-2doVto", "Banelco", "RedLink",
 ];
 
-/** Misma lista que tasaImportacion (boleta urbana / PDF futuro). */
+/** Conceptos de la boleta urbana (PDF futuro). */
 const CONCEPTOS_URBANA = [
   ["Alumb", "Tasa de Alumbrado"],
   ["Limp", "Tasa de Limpieza"],

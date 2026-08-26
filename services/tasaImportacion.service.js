@@ -16,7 +16,6 @@ const S3_BUCKET = process.env.AWS_BUCKET || "haciendagesell";
 const FIRMAS = {
   completo: ["Contribuyente", "Dominio", "Mes", "Patente", "$ 1er.Vto.", "1er.Vto."],
   simplificado: ["Contribuyente", "Dominio", "Cuota", "Deu", "$ 1er.Vto.", "1er.Vto."],
-  urbana: ["Titular", "Partida", "Catastro", "$1erVto", "F-1erVto", "CodBarra-1erVto"],
 };
 
 const REQUERIDAS = {
@@ -30,33 +29,7 @@ const REQUERIDAS = {
     "Marca", "Modelo", "Año", "Cuota", "$ 1er.Vto.", "$ 2do.Vto.", "1er.Vto.",
     "2do.Vto.", "Cod.Barra", "Pago Mis Cuentas", "Red Link",
   ],
-  urbana: [
-    "Titular", "Partida", "Catastro", "Mes", "Año", "Recibo", "$1erVto", "$2doVto",
-    "F-1erVto", "F-2doVto", "CodBarra-1erVto", "CodBarra-2doVto", "Banelco", "RedLink",
-  ],
 };
-
-const CONCEPTOS_URBANA = [
-  ["Alumb", "Tasa de Alumbrado"],
-  ["Limp", "Tasa de Limpieza"],
-  ["CVP", "Tasa C.V.P."],
-  ["Bomber", "Tasa de Bomberos"],
-  ["Cement", "Tasa de Cementerio"],
-  ["Turist", "Tasa Turística"],
-  ["Segur", "Tasa de Seguridad"],
-  ["Salud", "Tasa de Salud"],
-  ["Resid", "Tasa de Residuos"],
-  ["SegPya", "Seguridad en Playas"],
-  ["AguaCor", "Tasa de Agua Corriente"],
-  ["Retro", "Retroactivo"],
-  ["O.Gas", "Obra de Gas"],
-  ["MqVial", "Mantenimiento vial"],
-  ["Obras24", "Obras"],
-  ["Hospital", "Obras Hospital"],
-  ["Bonif10$", "Bonificación B.C."],
-  ["Bonif20%", "Bonificación 1er vencimiento"],
-  ["Credito", "Créditos"],
-];
 
 function texto(value) {
   return String(value == null ? "" : value).trim().replace(/\s+/g, " ");
@@ -114,7 +87,7 @@ function agregarObservacion(resultado, tipo, fila, columna, mensaje) {
 function detectarFormato(worksheet) {
   for (let rowNumber = 1; rowNumber <= Math.min(10, worksheet.rowCount); rowNumber += 1) {
     const headers = worksheet.getRow(rowNumber).values.slice(1).map(texto);
-    for (const formato of ["urbana", "completo", "simplificado"]) {
+    for (const formato of ["completo", "simplificado"]) {
       if (FIRMAS[formato].every((header) => headers.includes(header))) {
         return { formato, headerRow: rowNumber, headers };
       }
@@ -200,107 +173,6 @@ function construirBoleta(row, importacionId, tipoTasa = "AUTOMOTORES") {
   };
 }
 
-function construirBoletaUrbana(row, importacionId) {
-  const partida = texto(row.Partida).replace(/\s/g, "").toUpperCase();
-  const mes = Number(row.Mes);
-  const anio = Number(row.Año);
-  return {
-    tipoTasa: "URBANA",
-    importacionId,
-    objetoClave: partida,
-    anio,
-    cuota: mes,
-    _datosObjeto: {
-      contribuyente: {
-        nombre: texto(row.Titular),
-        domicilio: texto(row.Domicilio),
-        localidad: texto(row.Localidad),
-        codigoPostal: texto(row["C.P."]),
-      },
-      objeto: {
-        partida,
-        catastro: texto(row.Catastro),
-        parcela: texto(row.Parcela),
-        metrosConstruidos: Number(row.Const) || undefined,
-        zona: texto(row.Zon),
-      },
-      mensajeDeuda: texto(row.DeudaTexto),
-      mensajeBoleta: texto(row["TEXTO-2"]),
-      codigosPago: {
-        pagoMisCuentas: texto(row.Banelco),
-        redLink: texto(row.RedLink),
-      },
-    },
-    recibo: texto(row.Recibo),
-    conceptosCompactos: CONCEPTOS_URBANA
-      .map(([codigo], index) => [index, importeCentavos(row[codigo])])
-      .filter((item) => item[1] != null && item[1] !== 0),
-    importeCentavos: importeCentavos(row["$1erVto"]),
-    vencimientos: [
-      { orden: 1, fecha: fecha(row["F-1erVto"]), importeCentavos: importeCentavos(row["$1erVto"]), codigoBarra: texto(row["CodBarra-1erVto"]) },
-      { orden: 2, fecha: fecha(row["F-2doVto"]), importeCentavos: importeCentavos(row["$2doVto"]), codigoBarra: texto(row["CodBarra-2doVto"]) },
-    ],
-    activa: false,
-  };
-}
-
-function analizarFilasUrbanas(worksheet, detected, resultado, incluirBoletas) {
-  const seen = new Map();
-  const partidas = new Set();
-  const periods = new Set();
-  const lastRow = worksheet.actualRowCount || worksheet.rowCount;
-
-  for (let rowNumber = detected.headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
-    const row = filaComoObjeto(worksheet.getRow(rowNumber), detected.headers);
-    if (!Object.values(row).some((value) => texto(value))) continue;
-    resultado.cantidadEntradas += 1;
-
-    const partida = texto(row.Partida).replace(/\s/g, "").toUpperCase();
-    const month = Number(row.Mes);
-    const year = Number(row.Año);
-    const firstAmount = importeCentavos(row["$1erVto"]);
-    const secondAmount = importeCentavos(row["$2doVto"]);
-    const firstDate = fecha(row["F-1erVto"]);
-    const secondDate = fecha(row["F-2doVto"]);
-    const firstBarcode = texto(row["CodBarra-1erVto"]);
-    const secondBarcode = texto(row["CodBarra-2doVto"]);
-
-    if (!texto(row.Titular)) agregarObservacion(resultado, "error", rowNumber, "Titular", "El titular es obligatorio.");
-    if (!partida) agregarObservacion(resultado, "error", rowNumber, "Partida", "La partida es obligatoria.");
-    else if (!/^[A-Z0-9]{1,16}$/.test(partida)) agregarObservacion(resultado, "error", rowNumber, "Partida", "Debe contener entre 1 y 16 caracteres alfanuméricos.");
-    if (!texto(row.Domicilio)) agregarObservacion(resultado, "advertencia", rowNumber, "Domicilio", "El domicilio está vacío.");
-    if (!texto(row.Localidad)) agregarObservacion(resultado, "advertencia", rowNumber, "Localidad", "La localidad está vacía.");
-    if (!texto(row.Catastro)) agregarObservacion(resultado, "advertencia", rowNumber, "Catastro", "La nomenclatura catastral está vacía.");
-    if (!texto(row.Zon)) agregarObservacion(resultado, "advertencia", rowNumber, "Zon", "La zona está vacía.");
-    if (!Number.isInteger(month) || month < 1 || month > 12) agregarObservacion(resultado, "error", rowNumber, "Mes", "Debe ser un mes entre 01 y 12.");
-    if (!Number.isInteger(year) || year < 1900 || year > 2200) agregarObservacion(resultado, "error", rowNumber, "Año", "Debe ser un año válido de cuatro dígitos.");
-    if (!texto(row.Recibo)) agregarObservacion(resultado, "error", rowNumber, "Recibo", "El número de recibo es obligatorio.");
-    if (firstAmount == null || firstAmount < 0) agregarObservacion(resultado, "error", rowNumber, "$1erVto", "Debe ser un importe válido mayor o igual a cero.");
-    if (secondAmount == null || secondAmount < 0) agregarObservacion(resultado, "error", rowNumber, "$2doVto", "Debe ser un importe válido mayor o igual a cero.");
-    if (firstAmount != null && secondAmount != null && secondAmount < firstAmount) agregarObservacion(resultado, "advertencia", rowNumber, "$2doVto", "Es menor que el primer vencimiento.");
-    if (!firstDate) agregarObservacion(resultado, "error", rowNumber, "F-1erVto", "La fecha del primer vencimiento no es válida.");
-    if (!secondDate) agregarObservacion(resultado, "error", rowNumber, "F-2doVto", "La fecha del segundo vencimiento no es válida.");
-    if (firstDate && secondDate && secondDate < firstDate) agregarObservacion(resultado, "error", rowNumber, "F-2doVto", "Es anterior al primer vencimiento.");
-    if (!firstBarcode || !/^[A-Z0-9]+$/i.test(firstBarcode)) agregarObservacion(resultado, "error", rowNumber, "CodBarra-1erVto", "El código de barras no es válido.");
-    if (!secondBarcode || !/^[A-Z0-9]+$/i.test(secondBarcode)) agregarObservacion(resultado, "error", rowNumber, "CodBarra-2doVto", "El código de barras no es válido.");
-    if (!texto(row.Banelco)) agregarObservacion(resultado, "error", rowNumber, "Banelco", "El código de Pago Mis Cuentas es obligatorio.");
-    if (!texto(row.RedLink)) agregarObservacion(resultado, "error", rowNumber, "RedLink", "El código de Red Link es obligatorio.");
-
-    if (partida && Number.isInteger(month) && Number.isInteger(year)) {
-      const key = `${partida}|${year}|${month}`;
-      if (seen.has(key)) agregarObservacion(resultado, "error", rowNumber, "Partida / período", `Registro duplicado; también aparece en la fila ${seen.get(key)}.`);
-      else seen.set(key, rowNumber);
-      partidas.add(partida);
-      periods.add(`${String(month).padStart(2, "0")}/${year}`);
-    }
-    if (incluirBoletas) resultado.boletas.push(construirBoletaUrbana(row, null));
-  }
-
-  resultado.cantidadObjetos = partidas.size;
-  resultado.periodos = Array.from(periods).sort();
-  return resultado;
-}
-
 async function analizarFuente(source, { incluirBoletas = false, tipoTasa = "AUTOMOTORES" } = {}) {
   const workbook = new ExcelJS.Workbook();
   if (Buffer.isBuffer(source)) await workbook.xlsx.load(source);
@@ -328,11 +200,9 @@ async function analizarFuente(source, { incluirBoletas = false, tipoTasa = "AUTO
     agregarObservacion(resultado, "error", null, "Formato", "No se reconoció una plantilla válida para la tasa seleccionada.");
     return resultado;
   }
-  const formatoCoincide = tipoTasa === "URBANA"
-    ? detected.formato === "urbana"
-    : ["completo", "simplificado"].includes(detected.formato);
+  const formatoCoincide = ["completo", "simplificado"].includes(detected.formato);
   if (!formatoCoincide) {
-    agregarObservacion(resultado, "error", null, "Formato", `El archivo no corresponde a ${tipoTasa === "URBANA" ? "Tasa Urbana" : "Automotores"}.`);
+    agregarObservacion(resultado, "error", null, "Formato", "El archivo no corresponde a Automotores.");
     return resultado;
   }
 
@@ -340,9 +210,6 @@ async function analizarFuente(source, { incluirBoletas = false, tipoTasa = "AUTO
   const missing = REQUERIDAS[detected.formato].filter((header) => !detected.headers.includes(header));
   missing.forEach((header) => agregarObservacion(resultado, "error", detected.headerRow, header, "Falta una columna obligatoria."));
   if (missing.length) return resultado;
-  if (detected.formato === "urbana") {
-    return analizarFilasUrbanas(worksheet, detected, resultado, incluirBoletas);
-  }
 
   const seen = new Map();
   const domains = new Set();
@@ -680,9 +547,7 @@ async function insertarBoletasPorLotes(filePath, importacion) {
   for (let rowNumber = detected.headerRow + 1; rowNumber <= lastRow; rowNumber += 1) {
     const raw = filaComoObjeto(worksheet.getRow(rowNumber), detected.headers);
     if (!Object.values(raw).some((value) => texto(value))) continue;
-    const boleta = detected.formato === "urbana"
-      ? construirBoletaUrbana(raw, importacion._id)
-      : construirBoleta(normalizarFila(raw, detected.formato), importacion._id, importacion.tipoTasa);
+    const boleta = construirBoleta(normalizarFila(raw, detected.formato), importacion._id, importacion.tipoTasa);
     batch.push(boleta);
     procesadas += 1;
 
