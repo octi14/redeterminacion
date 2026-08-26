@@ -54,8 +54,11 @@ async function actualizarProgreso(importId, progreso) {
 
 exports.configuracion = async function configuracion(_req, res) {
   try {
-    const habilitada = await DeudaPagoService.pagoTasaUrbanaPublicoHabilitado();
-    return res.status(200).json({ data: { habilitada } });
+    const [habilitada, guardarArchivoOriginalTasas] = await Promise.all([
+      DeudaPagoService.pagoTasaUrbanaPublicoHabilitado(),
+      TasaUrbanaImportacionService.guardarOriginalHabilitado(),
+    ]);
+    return res.status(200).json({ data: { habilitada, guardarArchivoOriginalTasas } });
   } catch (e) {
     console.error("provinciaNet.configuracion:", e.message);
     return res
@@ -69,22 +72,39 @@ exports.actualizarConfiguracion = async function actualizarConfiguracion(req, re
     if (!(await usuarioPrivilegiado(req))) {
       return res.status(403).json({ message: "No tenés permisos para esta acción." });
     }
-    if (typeof req.body?.pagoTasaUrbanaPublico !== "boolean") {
-      return res
-        .status(400)
-        .json({ message: "Enviá pagoTasaUrbanaPublico como boolean." });
+    const data = {};
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "pagoTasaUrbanaPublico")) {
+      if (typeof req.body.pagoTasaUrbanaPublico !== "boolean") {
+        return res
+          .status(400)
+          .json({ message: "Enviá pagoTasaUrbanaPublico como boolean." });
+      }
+      const updated = await DeudaPagoService.actualizarPagoTasaUrbanaPublico(
+        req.body.pagoTasaUrbanaPublico
+      );
+      data.pagoTasaUrbanaPublico = {
+        key: updated.key,
+        value: updated.value === true,
+      };
     }
-    const updated = await DeudaPagoService.actualizarPagoTasaUrbanaPublico(
-      req.body.pagoTasaUrbanaPublico
-    );
-    return res.status(200).json({
-      data: {
-        pagoTasaUrbanaPublico: {
-          key: updated.key,
-          value: updated.value === true,
-        },
-      },
-    });
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "guardarArchivoOriginalTasas")) {
+      if (typeof req.body.guardarArchivoOriginalTasas !== "boolean") {
+        return res
+          .status(400)
+          .json({ message: "Enviá guardarArchivoOriginalTasas como boolean." });
+      }
+      const updated = await TasaUrbanaImportacionService.actualizarConfiguracionGuardarOriginal(
+        req.body.guardarArchivoOriginalTasas
+      );
+      data.guardarArchivoOriginalTasas = {
+        key: updated.key,
+        value: updated.value === true,
+      };
+    }
+    if (!Object.keys(data).length) {
+      return res.status(400).json({ message: "No se envió ninguna configuración válida." });
+    }
+    return res.status(200).json({ data });
   } catch (e) {
     console.error("provinciaNet.actualizarConfiguracion:", e.message);
     return res
@@ -142,6 +162,18 @@ exports.importarUrbana = async function importarUrbana(req, res) {
         },
       });
 
+      let archivoOriginal;
+      try {
+        if (await TasaUrbanaImportacionService.guardarOriginalHabilitado()) {
+          archivoOriginal = await TasaUrbanaImportacionService.subirOriginalArchivo(
+            archivo.path,
+            importacion,
+            nombre
+          );
+        }
+      } catch (s3Error) {
+        console.error("provinciaNet.importarUrbana S3:", s3Error.message);
+      }
       await TasaUrbanaImportacion.updateOne(
         { _id: importacion._id },
         {
@@ -157,6 +189,7 @@ exports.importarUrbana = async function importarUrbana(req, res) {
             cantidadAdvertencias: data.cantidadAdvertencias || 0,
             observaciones: data.observaciones || [],
             importBatchId: data.importBatchId,
+            ...(archivoOriginal ? { archivoOriginal } : {}),
             progreso: {
               etapa: "completada",
               procesadas: data.cantidadImportadas || 0,
@@ -196,9 +229,24 @@ exports.importarUrbana = async function importarUrbana(req, res) {
           },
         }
       );
+    } finally {
       await fs.promises.unlink(archivo.path).catch(() => {});
     }
   });
+};
+
+exports.archivoOriginalUrbana = async function archivoOriginalUrbana(req, res) {
+  try {
+    const original = await TasaUrbanaImportacionService.obtenerArchivoOriginal(req.params.importId);
+    res.setHeader("Content-Type", original.contentType);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodeURIComponent(original.nombreArchivo)}`
+    );
+    return res.send(original.body);
+  } catch (error) {
+    return res.status(error.status || 500).json({ message: error.message });
+  }
 };
 
 exports.progresoImportUrbana = async function progresoImportUrbana(req, res) {
