@@ -4,6 +4,11 @@ const AWS = require("aws-sdk");
 const Config = require("../models/configs.model");
 const TasaUrbanaDeuda = require("../models/tasaUrbanaDeuda.model");
 const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
+const TasaUrbanaPartida = require("../models/tasaUrbanaPartida.model");
+const {
+  detectarDeudaAnterior,
+  mensajeBoletaPersonalizadoDesdeFila,
+} = require("./tasaUrbanaTextos");
 
 const S3_BUCKET = process.env.AWS_BUCKET || "haciendagesell";
 const CONFIG_GUARDAR_ORIGINAL = "guardarArchivoOriginalTasas:URBANA";
@@ -149,6 +154,11 @@ function agregarObservacion(resultado, tipo, fila, columna, mensaje) {
   }
 }
 
+function codigoBarraValido(value) {
+  const barcode = texto(value);
+  return Boolean(barcode && /^[A-Z0-9]+$/i.test(barcode));
+}
+
 function construirDoc(row, rowNumber, resultado) {
   const partida = texto(row.Partida).replace(/\s/g, "").toUpperCase();
   const month = Number(row.Mes);
@@ -163,34 +173,53 @@ function construirDoc(row, rowNumber, resultado) {
 
   if (!texto(row.Titular)) agregarObservacion(resultado, "error", rowNumber, "Titular", "El titular es obligatorio.");
   if (!partida) agregarObservacion(resultado, "error", rowNumber, "Partida", "La partida es obligatoria.");
-  else if (!/^[A-Z0-9]{1,16}$/.test(partida)) agregarObservacion(resultado, "error", rowNumber, "Partida", "Debe contener entre 1 y 16 caracteres alfanuméricos.");
+  else if (!/^[A-Z0-9]{1,16}$/.test(partida)) {
+    agregarObservacion(resultado, "advertencia", rowNumber, "Partida", "Debe contener entre 1 y 16 caracteres alfanuméricos.");
+  }
   if (!texto(row.Domicilio)) agregarObservacion(resultado, "advertencia", rowNumber, "Domicilio", "El domicilio está vacío.");
   if (!texto(row.Localidad)) agregarObservacion(resultado, "advertencia", rowNumber, "Localidad", "La localidad está vacía.");
   if (!texto(row.Catastro)) agregarObservacion(resultado, "advertencia", rowNumber, "Catastro", "La nomenclatura catastral está vacía.");
   if (!texto(row.Zon)) agregarObservacion(resultado, "advertencia", rowNumber, "Zon", "La zona está vacía.");
-  if (!Number.isInteger(month) || month < 1 || month > 12) agregarObservacion(resultado, "error", rowNumber, "Mes", "Debe ser un mes entre 01 y 12.");
-  if (!Number.isInteger(year) || year < 1900 || year > 2200) agregarObservacion(resultado, "error", rowNumber, "Año", "Debe ser un año válido de cuatro dígitos.");
-  if (!texto(row.Recibo)) agregarObservacion(resultado, "error", rowNumber, "Recibo", "El número de recibo es obligatorio.");
-  if (firstAmount == null || firstAmount < 0) agregarObservacion(resultado, "error", rowNumber, "$1erVto", "Debe ser un importe válido mayor o igual a cero.");
-  if (secondAmount == null || secondAmount < 0) agregarObservacion(resultado, "error", rowNumber, "$2doVto", "Debe ser un importe válido mayor o igual a cero.");
-  if (firstAmount != null && secondAmount != null && secondAmount < firstAmount) {
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    agregarObservacion(resultado, "advertencia", rowNumber, "Mes", "Debe ser un mes entre 01 y 12.");
+  }
+  if (!Number.isInteger(year) || year < 1900 || year > 2200) {
+    agregarObservacion(resultado, "advertencia", rowNumber, "Año", "Debe ser un año válido de cuatro dígitos.");
+  }
+  if (!texto(row.Recibo)) agregarObservacion(resultado, "advertencia", rowNumber, "Recibo", "El número de recibo está vacío.");
+  if (firstAmount == null || firstAmount <= 0) {
+    agregarObservacion(resultado, "error", rowNumber, "$1erVto", "El saldo del primer vencimiento es obligatorio y debe ser mayor a cero.");
+  }
+  if (secondAmount == null || secondAmount < 0) {
+    agregarObservacion(resultado, "advertencia", rowNumber, "$2doVto", "Debe ser un importe válido mayor o igual a cero.");
+  }
+  if (firstAmount != null && firstAmount > 0 && secondAmount != null && secondAmount >= 0 && secondAmount < firstAmount) {
     agregarObservacion(resultado, "advertencia", rowNumber, "$2doVto", "Es menor que el primer vencimiento.");
   }
-  if (!firstDate) agregarObservacion(resultado, "error", rowNumber, "F-1erVto", "La fecha del primer vencimiento no es válida.");
-  if (!secondDate) agregarObservacion(resultado, "error", rowNumber, "F-2doVto", "La fecha del segundo vencimiento no es válida.");
+  if (!firstDate) agregarObservacion(resultado, "advertencia", rowNumber, "F-1erVto", "La fecha del primer vencimiento no es válida.");
+  if (!secondDate) agregarObservacion(resultado, "advertencia", rowNumber, "F-2doVto", "La fecha del segundo vencimiento no es válida.");
   if (firstDate && secondDate && secondDate < firstDate) {
-    agregarObservacion(resultado, "error", rowNumber, "F-2doVto", "Es anterior al primer vencimiento.");
+    agregarObservacion(resultado, "advertencia", rowNumber, "F-2doVto", "Es anterior al primer vencimiento.");
   }
-  if (!firstBarcode || !/^[A-Z0-9]+$/i.test(firstBarcode)) {
-    agregarObservacion(resultado, "error", rowNumber, "CodBarra-1erVto", "El código de barras no es válido.");
+  if (!codigoBarraValido(firstBarcode)) {
+    agregarObservacion(resultado, "error", rowNumber, "CodBarra-1erVto", "El código de barras del primer vencimiento es obligatorio.");
   }
-  if (!secondBarcode || !/^[A-Z0-9]+$/i.test(secondBarcode)) {
-    agregarObservacion(resultado, "error", rowNumber, "CodBarra-2doVto", "El código de barras no es válido.");
+  if (!codigoBarraValido(secondBarcode)) {
+    agregarObservacion(resultado, "advertencia", rowNumber, "CodBarra-2doVto", "El código de barras del segundo vencimiento no es válido.");
   }
-  if (!texto(row.Banelco)) agregarObservacion(resultado, "error", rowNumber, "Banelco", "El código de Pago Mis Cuentas es obligatorio.");
-  if (!texto(row.RedLink)) agregarObservacion(resultado, "error", rowNumber, "RedLink", "El código de Red Link es obligatorio.");
+  if (!texto(row.Banelco)) agregarObservacion(resultado, "advertencia", rowNumber, "Banelco", "El código de Pago Mis Cuentas está vacío.");
+  if (!texto(row.RedLink)) agregarObservacion(resultado, "advertencia", rowNumber, "RedLink", "El código de Red Link está vacío.");
 
   if (resultado.cantidadErrores > erroresAntes) return null;
+
+  const cuota = Number.isInteger(month) && month >= 1 && month <= 12 ? month : 0;
+  const anio = Number.isInteger(year) && year >= 1900 && year <= 2200 ? year : 0;
+  const importeSegundoVto = secondAmount != null && secondAmount >= 0 ? secondAmount : firstAmount;
+  const codigoSegundoVto = codigoBarraValido(secondBarcode) ? secondBarcode : firstBarcode;
+  const deudaAnterior = detectarDeudaAnterior(row);
+  const mensajeBoletaPersonalizado = deudaAnterior
+    ? mensajeBoletaPersonalizadoDesdeFila(row)
+    : undefined;
 
   const metros = Number(String(row.Const ?? "").replace(",", "."));
   const conceptosCompactos = CONCEPTOS_URBANA.map(([codigo], index) => [
@@ -212,26 +241,62 @@ function construirDoc(row, rowNumber, resultado) {
       metrosConstruidos: Number.isFinite(metros) ? metros : undefined,
       zona: texto(row.Zon),
     },
-    anio: year,
-    cuota: month,
+    anio,
+    cuota,
     recibo: texto(row.Recibo),
     debito: texto(row.Debito) || undefined,
-    mensajeDeuda: texto(row.DeudaTexto) || undefined,
-    mensajeBoleta: texto(row["TEXTO-2"] || row.TEXTO2) || undefined,
-    codigosPago: {
-      pagoMisCuentas: texto(row.Banelco),
-      redLink: texto(row.RedLink),
-    },
+    deudaAnterior,
+    mensajeBoletaPersonalizado,
     conceptosCompactos,
     importeCentavos: firstAmount,
     vencimientos: [
-      { orden: 1, fecha: firstDate, importeCentavos: firstAmount, codigoBarra: firstBarcode },
-      { orden: 2, fecha: secondDate, importeCentavos: secondAmount, codigoBarra: secondBarcode },
+      { orden: 1, importeCentavos: firstAmount, codigoBarra: firstBarcode },
+      { orden: 2, importeCentavos: importeSegundoVto, codigoBarra: codigoSegundoVto },
     ],
     activa: true,
+    _calendario: {
+      anio,
+      cuota,
+      vencimientos: [
+        { orden: 1, fecha: firstDate || secondDate || new Date(0) },
+        { orden: 2, fecha: secondDate || firstDate || new Date(0) },
+      ],
+    },
+    _codigosPago: {
+      pagoMisCuentas: texto(row.Banelco) || undefined,
+      redLink: texto(row.RedLink) || undefined,
+    },
   };
 }
 
+function prepararDocParaPersistir(doc) {
+  const { _calendario, _codigosPago, ...persistido } = doc;
+  if (!persistido.mensajeBoletaPersonalizado) delete persistido.mensajeBoletaPersonalizado;
+  if (!persistido.deudaAnterior) delete persistido.deudaAnterior;
+  return persistido;
+}
+
+function registrarCalendarioPeriodo(calendarioPeriodos, calendario) {
+  if (!calendario?.anio && calendario?.anio !== 0) return;
+  const key = `${calendario.anio}|${calendario.cuota}`;
+  if (calendarioPeriodos.has(key)) return;
+  calendarioPeriodos.set(key, {
+    anio: calendario.anio,
+    cuota: calendario.cuota,
+    vencimientos: calendario.vencimientos,
+  });
+}
+
+function registrarCodigosPartida(codigosPorPartida, partida, codigosPago) {
+  if (!partida || codigosPorPartida.has(partida)) return;
+  const pagoMisCuentas = codigosPago?.pagoMisCuentas;
+  const redLink = codigosPago?.redLink;
+  if (!pagoMisCuentas && !redLink) return;
+  codigosPorPartida.set(partida, {
+    pagoMisCuentas: pagoMisCuentas || "",
+    redLink: redLink || "",
+  });
+}
 async function reportProgress(onProgress, patch) {
   if (typeof onProgress === "function") {
     try {
@@ -292,6 +357,8 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onPro
   const partidas = new Set();
   const periods = new Set();
   const periodKeys = new Set();
+  const calendarioPeriodos = new Map();
+  const codigosPorPartida = new Map();
   const BATCH_SIZE = 200;
   let batch = [];
   let detected = null;
@@ -343,7 +410,7 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onPro
     if (seen.has(key)) {
       agregarObservacion(
         resultado,
-        "error",
+        "advertencia",
         rowNumber,
         "Partida / período",
         `Registro duplicado; también aparece en la fila ${seen.get(key)}.`
@@ -354,10 +421,13 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onPro
     partidas.add(doc.partida);
     periods.add(`${String(doc.cuota).padStart(2, "0")}/${doc.anio}`);
     periodKeys.add(`${doc.anio}|${doc.cuota}`);
+    registrarCalendarioPeriodo(calendarioPeriodos, doc._calendario);
+    registrarCodigosPartida(codigosPorPartida, doc.partida, doc._codigosPago);
 
-    if (collectDocs) resultado.docs.push(doc);
+    const persistido = prepararDocParaPersistir(doc);
+    if (collectDocs) resultado.docs.push(persistido);
     if (typeof onBatch === "function") {
-      batch.push(doc);
+      batch.push(persistido);
       if (batch.length >= BATCH_SIZE) await flushBatch();
     }
 
@@ -393,6 +463,10 @@ async function analizarYConstruir(filePath, { collectDocs = true, onBatch, onPro
   resultado.cantidadObjetos = partidas.size;
   resultado.periodos = Array.from(periods).sort();
   resultado.periodKeys = Array.from(periodKeys);
+  resultado.calendarioPeriodos = Array.from(calendarioPeriodos.values()).sort(
+    (a, b) => a.anio - b.anio || a.cuota - b.cuota
+  );
+  resultado.codigosPorPartida = codigosPorPartida;
   console.log(
     `Import urbana: stream listo en ${Math.round((Date.now() - started) / 1000)}s, ${ramMb()} MB RAM`
   );
@@ -438,7 +512,7 @@ exports.importarArchivo = async function importarArchivo({
     );
     const err = new Error(
       analisis.cantidadErrores
-        ? "El archivo no tiene filas válidas para importar. Revisá titular, recibo, ambos vencimientos, códigos de barra, Banelco y Red Link."
+        ? "El archivo no tiene filas válidas para importar. Revisá titular, partida, saldo ($1erVto) y código de barra del primer vencimiento."
         : "No se encontraron boletas urbanas válidas para importar."
     );
     err.status = 400;
@@ -456,6 +530,18 @@ exports.importarArchivo = async function importarArchivo({
       importBatchId,
     };
     throw err;
+  }
+
+  const codigosDocs = Array.from(analisis.codigosPorPartida.entries()).map(([partida, codigosPago]) => ({
+    importBatchId,
+    partida,
+    codigosPago,
+  }));
+  if (codigosDocs.length) {
+    await TasaUrbanaPartida.insertMany(codigosDocs, { ordered: false });
+    console.log(
+      `Import urbana: ${codigosDocs.length} códigos PMC/Link por partida (${importBatchId})`
+    );
   }
 
   await reportProgress(onProgress, {
@@ -510,6 +596,7 @@ exports.importarArchivo = async function importarArchivo({
     cantidadErrores: analisis.cantidadErrores,
     cantidadAdvertencias: analisis.cantidadAdvertencias,
     periodos: analisis.periodos,
+    calendarioPeriodos: analisis.calendarioPeriodos || [],
     observaciones: analisis.observaciones.slice(0, 40),
     importBatchId,
   };

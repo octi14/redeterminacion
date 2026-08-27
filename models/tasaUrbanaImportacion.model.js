@@ -10,6 +10,23 @@ const observaciónSchema = new Schema(
   { _id: false }
 );
 
+const vencimientoCalendarioSchema = new Schema(
+  {
+    orden: { type: Number, required: true },
+    fecha: { type: Date, required: true },
+  },
+  { _id: false }
+);
+
+const calendarioPeriodoSchema = new Schema(
+  {
+    anio: { type: Number, required: true },
+    cuota: { type: Number, required: true },
+    vencimientos: { type: [vencimientoCalendarioSchema], default: [] },
+  },
+  { _id: false }
+);
+
 const tasaUrbanaImportacionSchema = new Schema(
   {
     nombreArchivo: { type: String, required: true },
@@ -23,6 +40,7 @@ const tasaUrbanaImportacionSchema = new Schema(
     },
     formato: { type: String },
     periodos: { type: [String], default: [] },
+    calendarioPeriodos: { type: [calendarioPeriodoSchema], default: [] },
     cantidadEntradas: { type: Number, default: 0 },
     cantidadObjetos: { type: Number, default: 0 },
     cantidadImportadas: { type: Number, default: 0 },

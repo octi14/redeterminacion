@@ -3,9 +3,10 @@ const { Schema, model } = require("mongoose");
 const vencimientoSchema = new Schema(
   {
     orden: { type: Number, required: true },
-    fecha: { type: Date, required: true },
     importeCentavos: { type: Number, required: true },
     codigoBarra: { type: String, required: true },
+    /** Solo en datos legacy/QA; en import nuevo las fechas viven en calendarioPeriodos. */
+    fecha: Date,
   },
   { _id: false }
 );
@@ -29,12 +30,9 @@ const tasaUrbanaDeudaSchema = new Schema(
     cuota: { type: Number, required: true },
     recibo: String,
     debito: String,
-    mensajeDeuda: String,
-    mensajeBoleta: String,
-    codigosPago: {
-      pagoMisCuentas: String,
-      redLink: String,
-    },
+    deudaAnterior: { type: Boolean, default: false },
+    /** Solo cuando deudaAnterior y el TEXTO-2 trae montos/años personalizados. */
+    mensajeBoletaPersonalizado: String,
     /** [indiceConcepto, importeCentavos] alineado a CONCEPTOS_URBANA del importador */
     conceptosCompactos: [[Number]],
     importeCentavos: { type: Number, required: true },

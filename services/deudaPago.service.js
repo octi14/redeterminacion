@@ -2,6 +2,7 @@ const config = require("../config.js");
 const TasaUrbanaDeuda = require("../models/tasaUrbanaDeuda.model");
 const TasaBoleta = require("../models/tasaBoleta.model");
 require("../models/tasaObjeto.model");
+const TasaUrbanaBoletaService = require("./tasaUrbanaBoleta.service");
 const Config = require("../models/configs.model");
 
 const TIPOS = {
@@ -140,17 +141,22 @@ async function resolverUrbana(partida) {
   }
 
   const first = docs[0];
-  const items = docs.map((doc) =>
-    mapItem({
+  const calendarios = await TasaUrbanaBoletaService.cargarCalendariosPorBatch(
+    docs.map((doc) => doc.importBatchId)
+  );
+  const items = docs.map((doc) => {
+    const calendarioPeriodos = calendarios.get(String(doc.importBatchId)) || [];
+    const vencimientos = TasaUrbanaBoletaService.hidratarVencimientos(doc, calendarioPeriodos);
+    return mapItem({
       id: doc._id,
       tipoTasa: TIPOS.URBANA,
       objetoClave: clave,
       anio: doc.anio,
       cuota: doc.cuota,
       importeCentavos: doc.importeCentavos,
-      vencimientos: doc.vencimientos,
-    })
-  );
+      vencimientos,
+    });
+  });
 
   const saldoCentavos = items.reduce((acc, item) => acc + Number(item.importeCentavos || 0), 0);
 

@@ -6,6 +6,7 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const config = require("../config.js");
 const TasaUrbanaDeuda = require("../models/tasaUrbanaDeuda.model");
+const TasaUrbanaPartida = require("../models/tasaUrbanaPartida.model");
 
 const PARTIDA = "QAURB001";
 
@@ -15,6 +16,7 @@ async function run() {
 
   await mongoose.connect(uri);
   await TasaUrbanaDeuda.deleteMany({ partida: PARTIDA });
+  await TasaUrbanaPartida.deleteMany({ partida: PARTIDA });
 
   const barcode =
     String(config.PROVINCIA_NET_HOMOLOG_BARCODE || "").trim() ||
@@ -25,6 +27,7 @@ async function run() {
   const currentMonth = now.getMonth() + 1;
   const previousMonth = currentMonth === 1 ? 12 : currentMonth - 1;
   const previousYear = currentMonth === 1 ? year - 1 : year;
+  const importBatchId = new mongoose.Types.ObjectId();
 
   const docs = [
     {
@@ -44,12 +47,6 @@ async function run() {
       anio: year,
       cuota: currentMonth,
       recibo: `${year}-${String(currentMonth).padStart(2, "0")}`,
-      mensajeDeuda: "",
-      mensajeBoleta: "DATO DE PRUEBA - SIN VALIDEZ",
-      codigosPago: {
-        pagoMisCuentas: `QAURB${year}${currentMonth}`,
-        redLink: `QAURB${currentMonth}${year}`,
-      },
       conceptosCompactos: [
         [1, 50000],
         [2, 40000],
@@ -70,6 +67,7 @@ async function run() {
           codigoBarra: barcode,
         },
       ],
+      importBatchId,
       activa: true,
     },
     {
@@ -89,12 +87,8 @@ async function run() {
       anio: previousYear,
       cuota: previousMonth,
       recibo: `${previousYear}-${String(previousMonth).padStart(2, "0")}`,
-      mensajeDeuda: "Esta Partida Registra Deuda Anterior",
-      mensajeBoleta: "DATO DE PRUEBA - SIN VALIDEZ",
-      codigosPago: {
-        pagoMisCuentas: `QAURB${previousYear}${previousMonth}`,
-        redLink: `QAURB${previousMonth}${previousYear}`,
-      },
+      deudaAnterior: true,
+      mensajeBoletaPersonalizado: "DATO DE PRUEBA - SIN VALIDEZ (deuda anterior)",
       conceptosCompactos: [
         [1, 45000],
         [2, 35000],
@@ -115,11 +109,20 @@ async function run() {
           codigoBarra: barcode,
         },
       ],
+      importBatchId,
       activa: true,
     },
   ];
 
   await TasaUrbanaDeuda.insertMany(docs);
+  await TasaUrbanaPartida.create({
+    importBatchId,
+    partida: PARTIDA,
+    codigosPago: {
+      pagoMisCuentas: `QAURB${year}${currentMonth}`,
+      redLink: `QAURB${currentMonth}${year}`,
+    },
+  });
   console.log(`Seed OK: ${docs.length} boletas urbanas para partida ${PARTIDA}`);
   await mongoose.disconnect();
 }

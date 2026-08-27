@@ -181,6 +181,7 @@ exports.importarUrbana = async function importarUrbana(req, res) {
             estado: "completada",
             formato: data.formato,
             periodos: data.periodos || [],
+            calendarioPeriodos: data.calendarioPeriodos || [],
             cantidadEntradas: data.cantidadEntradas || 0,
             cantidadObjetos: data.cantidadObjetos || 0,
             cantidadImportadas: data.cantidadImportadas || 0,
