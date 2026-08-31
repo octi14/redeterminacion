@@ -20,8 +20,25 @@ function periodoLabel(cuota, anio) {
   return `${String(cuota).padStart(2, "0")}/${anio}`;
 }
 
+const LONGITUD_PARTIDA = 8;
+
 function normalizarPartida(value) {
-  return String(value || "").replace(/\s/g, "").toUpperCase();
+  const clave = String(value || "").replace(/\s/g, "").toUpperCase();
+  if (!clave) return "";
+  return clave.length < LONGITUD_PARTIDA ? clave.padStart(LONGITUD_PARTIDA, "0") : clave;
+}
+
+function clavesPartidaParaBusqueda(value) {
+  const clave = String(value || "").replace(/\s/g, "").toUpperCase();
+  if (!clave) return [];
+  const sinCeros = clave.replace(/^0+/, "") || "0";
+  const padded =
+    sinCeros.length < LONGITUD_PARTIDA
+      ? sinCeros.padStart(LONGITUD_PARTIDA, "0")
+      : clave.length < LONGITUD_PARTIDA
+        ? clave.padStart(LONGITUD_PARTIDA, "0")
+        : clave;
+  return [...new Set([clave, sinCeros, padded])];
 }
 
 function normalizarDominio(value) {
@@ -124,12 +141,13 @@ async function resolverUrbana(partida) {
     throw err;
   }
 
-  const docs = await TasaUrbanaDeuda.find({ partida: clave, activa: true })
+  const claves = clavesPartidaParaBusqueda(partida);
+  const docs = await TasaUrbanaDeuda.find({ partida: { $in: claves }, activa: true })
     .sort({ anio: -1, cuota: -1 })
     .lean();
 
   if (!docs.length) {
-    const existe = await TasaUrbanaDeuda.exists({ partida: clave });
+    const existe = await TasaUrbanaDeuda.exists({ partida: { $in: claves } });
     const err = new Error(
       existe
         ? "La partida existe, pero no tiene deuda activa para abonar online."
