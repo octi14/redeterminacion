@@ -1,13 +1,18 @@
 const nodemailer = require('nodemailer');
+const config = require('../config');
 
 exports.enviarCorreo = async (destinatario, asunto, mensaje) => {
+  if (!config.MAILER_PASSWORD) {
+    throw new Error('Falta MAILER_PASSWORD');
+  }
+
   const transporter = nodemailer.createTransport({
-    host: 'mail.gesell.gob.ar', // Proporcionado por el proveedor
-    port: 465,               // Cambiar según el puerto necesario
-    secure: true,           // Cambiar a true si usas SSL (puerto 465)
+    host: 'mail.gesell.gob.ar',
+    port: 465,
+    secure: true,
     auth: {
       user: 'no-contestar@gesell.gob.ar',
-      pass: '^g)~Y1ejNkuG',
+      pass: config.MAILER_PASSWORD,
     },
   });
 
