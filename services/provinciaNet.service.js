@@ -157,7 +157,7 @@ exports.createPreorder = async function createPreorder({
 
   const payload = {
     payer: normalizedPayer,
-    payments: paymentItems,
+    payments: normalizePayments(paymentItems),
   };
 
   const pnResponse = await callProvinciaNetPreorder(payload);
