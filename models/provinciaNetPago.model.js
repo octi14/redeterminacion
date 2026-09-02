@@ -19,6 +19,7 @@ const paymentItemSchema = new Schema(
     barcode: { type: String },
     service: { type: String },
     paid: { type: Boolean },
+    deudaItemId: { type: String },
   },
   { _id: false }
 );
@@ -41,6 +42,7 @@ const provinciaNetPagoSchema = new Schema(
     payments: [paymentItemSchema],
     tipoTasa: { type: String, default: "URBANA", index: true },
     objetoClave: { type: String, index: true },
+    itemIds: [{ type: String }],
     expiredAt: { type: Date },
     methodSelected: { type: String },
     rawWebhook: { type: Schema.Types.Mixed },

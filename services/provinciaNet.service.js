@@ -131,6 +131,7 @@ exports.createPreorder = async function createPreorder({
   let paymentItems;
   let resolvedTipo = tipo;
   let resolvedClave = objetoClave || null;
+  let resolvedItemIds = [];
 
   if (hasExplicitPayments) {
     paymentItems = normalizePayments(payments);
@@ -141,7 +142,11 @@ exports.createPreorder = async function createPreorder({
       itemIds,
       periodos,
     });
-    paymentItems = built.payments;
+    resolvedItemIds = built.itemIds || [];
+    paymentItems = built.payments.map((payment, index) => ({
+      ...payment,
+      deudaItemId: resolvedItemIds[index] || undefined,
+    }));
     resolvedTipo = built.tipoTasa;
     resolvedClave = built.objetoClave;
   } else {
@@ -185,6 +190,7 @@ exports.createPreorder = async function createPreorder({
       payments: paymentItems,
       tipoTasa: resolvedTipo,
       objetoClave: resolvedClave,
+      itemIds: resolvedItemIds,
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
@@ -256,14 +262,21 @@ exports.applyWebhookPayload = async function applyWebhookPayload(payload) {
     return existing.toObject();
   }
 
+  const existingPayments = existing?.payments || [];
   const payments = Array.isArray(preorder.payments)
-    ? preorder.payments.map((item) => ({
-        amount: item.amount != null ? String(item.amount) : undefined,
-        detail: item.detail,
-        barcode: item.barcode,
-        service: item.service,
-        paid: typeof item.paid === "boolean" ? item.paid : undefined,
-      }))
+    ? preorder.payments.map((item, index) => {
+        const prev =
+          existingPayments[index] ||
+          existingPayments.find((p) => p.barcode && p.barcode === item.barcode);
+        return {
+          amount: item.amount != null ? String(item.amount) : undefined,
+          detail: item.detail,
+          barcode: item.barcode,
+          service: item.service,
+          paid: typeof item.paid === "boolean" ? item.paid : undefined,
+          deudaItemId: prev?.deudaItemId || item.deudaItemId,
+        };
+      })
     : undefined;
 
   const update = {
@@ -295,6 +308,20 @@ exports.applyWebhookPayload = async function applyWebhookPayload(payload) {
     { $set: update, $setOnInsert: { tipoTasa: "URBANA" } },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
+
+  if (status === "Finalizado" || status === "Parcial") {
+    try {
+      await DeudaPagoService.marcarPeriodosPagados({
+        preorderUuid: doc.uuid,
+        tipoTasa: doc.tipoTasa,
+        status,
+        itemIds: doc.itemIds || [],
+        payments: doc.payments || [],
+      });
+    } catch (markError) {
+      console.error("provinciaNet.marcarPeriodosPagados:", markError.message);
+    }
+  }
 
   return doc.toObject();
 };

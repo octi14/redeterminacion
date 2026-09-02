@@ -40,6 +40,9 @@ const tasaUrbanaDeudaSchema = new Schema(
     /** Identifica la corrida de importación para activar/desactivar por lotes. */
     importBatchId: { type: Schema.Types.ObjectId },
     activa: { type: Boolean, default: true },
+    pagado: { type: Boolean, default: false },
+    pagadoAt: { type: Date },
+    pagadoPreorderUuid: { type: String },
   },
   {
     timestamps: false,

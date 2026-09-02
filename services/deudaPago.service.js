@@ -91,8 +91,36 @@ function mapVencimientosPublicos(vencimientos = [], now = Date.now()) {
     });
 }
 
-function mapItem({ id, tipoTasa, objetoClave, anio, cuota, importeCentavos, vencimientos }) {
+function mapItem({
+  id,
+  tipoTasa,
+  objetoClave,
+  anio,
+  cuota,
+  importeCentavos,
+  vencimientos,
+  pagado = false,
+  pagadoAt = null,
+}) {
   const periodo = periodoLabel(cuota, anio);
+  if (pagado) {
+    return {
+      id: String(id),
+      periodo,
+      anio,
+      cuota,
+      importeCentavos: Number(importeCentavos || 0),
+      importe: amountFromCentavos(importeCentavos),
+      pagado: true,
+      pagadoAt: pagadoAt || null,
+      vencido: false,
+      pagable: false,
+      vencimientoActivo: null,
+      vencimientos: mapVencimientosPublicos(vencimientos),
+      _payment: null,
+    };
+  }
+
   const vtos = mapVencimientosPublicos(vencimientos);
   const vto = elegirVencimiento(vencimientos);
   const vencido = !vto;
@@ -142,7 +170,10 @@ async function resolverUrbana(partida) {
   }
 
   const claves = clavesPartidaParaBusqueda(partida);
-  const docs = await TasaUrbanaDeuda.find({ partida: { $in: claves }, activa: true })
+  const docs = await TasaUrbanaDeuda.find({
+    partida: { $in: claves },
+    $or: [{ activa: true, pagado: { $ne: true } }, { pagado: true }],
+  })
     .sort({ anio: -1, cuota: -1 })
     .lean();
 
@@ -173,10 +204,14 @@ async function resolverUrbana(partida) {
       cuota: doc.cuota,
       importeCentavos: doc.importeCentavos,
       vencimientos,
+      pagado: doc.pagado === true,
+      pagadoAt: doc.pagadoAt,
     });
   });
 
-  const saldoCentavos = items.reduce((acc, item) => acc + Number(item.importeCentavos || 0), 0);
+  const saldoCentavos = items
+    .filter((item) => !item.pagado && item.pagable)
+    .reduce((acc, item) => acc + Number(item.importeCentavos || 0), 0);
 
   return {
     tipoTasa: TIPOS.URBANA,
@@ -187,7 +222,7 @@ async function resolverUrbana(partida) {
     items: items.map(({ _payment, ...rest }) => rest),
     saldoCentavos,
     saldo: amountFromCentavos(saldoCentavos),
-    _paymentItems: items,
+    _paymentItems: items.filter((item) => !item.pagado && item._payment),
   };
 }
 
@@ -202,7 +237,7 @@ async function resolverAutomotor(dominio) {
   const boletas = await TasaBoleta.find({
     tipoTasa: TIPOS.AUTOMOTORES,
     objetoClave: clave,
-    activa: true,
+    $or: [{ activa: true, pagado: { $ne: true } }, { pagado: true }],
   })
     .sort({ anio: -1, cuota: -1 })
     .populate("objetoId")
@@ -233,10 +268,14 @@ async function resolverAutomotor(dominio) {
       cuota: boleta.cuota,
       importeCentavos: boleta.importeCentavos,
       vencimientos: boleta.vencimientos,
+      pagado: boleta.pagado === true,
+      pagadoAt: boleta.pagadoAt,
     })
   );
 
-  const saldoCentavos = items.reduce((acc, item) => acc + Number(item.importeCentavos || 0), 0);
+  const saldoCentavos = items
+    .filter((item) => !item.pagado && item.pagable)
+    .reduce((acc, item) => acc + Number(item.importeCentavos || 0), 0);
 
   return {
     tipoTasa: TIPOS.AUTOMOTORES,
@@ -247,7 +286,7 @@ async function resolverAutomotor(dominio) {
     items: items.map(({ _payment, ...rest }) => rest),
     saldoCentavos,
     saldo: amountFromCentavos(saldoCentavos),
-    _paymentItems: items,
+    _paymentItems: items.filter((item) => !item.pagado && item._payment),
   };
 }
 
@@ -309,6 +348,7 @@ exports.construirPaymentsDesdeDeuda = async function construirPaymentsDesdeDeuda
   return {
     tipoTasa: deuda.tipoTasa,
     objetoClave: deuda.objetoClave,
+    itemIds: selected.map((item) => String(item.id)),
     payments,
     deudaPublica: {
       tipoTasa: deuda.tipoTasa,
@@ -337,6 +377,44 @@ exports.actualizarPagoTasaUrbanaPublico = async function actualizarPagoTasaUrban
     },
     { new: true, upsert: true }
   );
+};
+
+exports.marcarPeriodosPagados = async function marcarPeriodosPagados({
+  preorderUuid,
+  tipoTasa,
+  status,
+  itemIds = [],
+  payments = [],
+} = {}) {
+  if (!["Finalizado", "Parcial"].includes(status)) {
+    return { updated: 0 };
+  }
+
+  let idsToMark = [];
+  if (status === "Finalizado") {
+    idsToMark = itemIds.map(String);
+  } else {
+    idsToMark = (payments || [])
+      .filter((item) => item.paid === true && item.deudaItemId)
+      .map((item) => String(item.deudaItemId));
+  }
+
+  idsToMark = [...new Set(idsToMark.filter(Boolean))];
+  if (!idsToMark.length) return { updated: 0 };
+
+  const tipo = normalizarTipoTasa(tipoTasa || TIPOS.URBANA);
+  const update = {
+    pagado: true,
+    pagadoAt: new Date(),
+    pagadoPreorderUuid: String(preorderUuid || ""),
+    activa: false,
+  };
+  const Model = tipo === TIPOS.URBANA ? TasaUrbanaDeuda : TasaBoleta;
+  const result = await Model.updateMany(
+    { _id: { $in: idsToMark }, pagado: { $ne: true } },
+    { $set: update }
+  );
+  return { updated: result.modifiedCount || 0 };
 };
 
 exports.TIPOS = TIPOS;

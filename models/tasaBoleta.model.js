@@ -21,6 +21,9 @@ const tasaBoletaSchema = new Schema(
       },
     ],
     activa: { type: Boolean, default: false },
+    pagado: { type: Boolean, default: false },
+    pagadoAt: { type: Date },
+    pagadoPreorderUuid: { type: String },
   },
   { timestamps: false, versionKey: false }
 );
