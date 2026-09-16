@@ -1,9 +1,9 @@
 const CONCEPTOS_URBANA = [
-  "Tasa de Alumbrado", "Tasa de Limpieza", "Tasa C.V.P.", "Tasa de Bomberos",
+  "Tasa de Alumbrado", "Tasa de Limpieza", "Tasa CVP", "Tasa de Bomberos",
   "Tasa de Cementerio", "Tasa Turística", "Tasa de Seguridad", "Tasa de Salud",
-  "Tasa de Residuos", "Seguridad en Playas", "Tasa de Agua Corriente", "Retroactivo",
-  "Obra de Gas", "Mantenimiento vial", "Obras", "Obras Hospital", "Bonificación B.C.",
-  "Bonificación 1er vencimiento", "Créditos",
+  "Tasa de Residuos", "Tasa de Seguridad en Playas", "Tasa de Agua Corriente", "Retroactivo",
+  "Obra de Gas", "Maq. vial", "Obras", "Obras Hospital", "Bonificación BC",
+  "Bonificación 1° vencimiento", "Créditos",
 ];
 
 function periodo(boleta) {

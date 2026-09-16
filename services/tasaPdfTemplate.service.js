@@ -5,7 +5,7 @@ const TasaCatalogo = require("./tasaCatalogo.service");
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 1008;
-const AUTOMOTOR_BG_PATH = path.join(__dirname, "..", "assets", "tasa-automotor-bg-2026.jpg");
+const BOLETA_BG_PATH = path.join(__dirname, "..", "assets", "tasa-automotor-bg-2026.jpg");
 
 function colorHex(hex) {
   const value = String(hex || "#13875e").replace("#", "");
@@ -24,8 +24,8 @@ async function crearPagina(pdf, tipoTasa) {
   const tasa = TasaCatalogo.requerir(tipoTasa);
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
-  if (tasa.codigo === "AUTOMOTORES" && fs.existsSync(AUTOMOTOR_BG_PATH)) {
-    const background = await pdf.embedJpg(fs.readFileSync(AUTOMOTOR_BG_PATH));
+  if ((tasa.codigo === "AUTOMOTORES" || tasa.codigo === "URBANA") && fs.existsSync(BOLETA_BG_PATH)) {
+    const background = await pdf.embedJpg(fs.readFileSync(BOLETA_BG_PATH));
     page.drawImage(background, { x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT });
     return page;
   }
