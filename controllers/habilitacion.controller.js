@@ -289,8 +289,11 @@ exports.add = async function (req, res) {
     if (formData.solicitante) {
       const cuit = toNumberOrUndefined(formData.solicitante.cuit);
       const telefono = toNumberOrUndefined(formData.solicitante.telefono);
+      const cuitPersonaJuridica = toNumberOrUndefined(formData.solicitante.cuitPersonaJuridica);
       if (cuit !== undefined) formData.solicitante.cuit = cuit;
       if (telefono !== undefined) formData.solicitante.telefono = telefono;
+      if (cuitPersonaJuridica !== undefined) formData.solicitante.cuitPersonaJuridica = cuitPersonaJuridica;
+      else delete formData.solicitante.cuitPersonaJuridica;
     }
 
     if (formData.inmueble) {

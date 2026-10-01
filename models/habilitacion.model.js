@@ -17,6 +17,7 @@ const solicitanteSchema = new Schema({
   apellido: { type: String, required: true },
   dni: { type: String, required: true },
   cuit: { type: Number, required: true },
+  cuitPersonaJuridica: { type: Number },
   razonSocial: String,
   domicilioReal: { type: String, required: true },
   telefono: { type: Number, required: true },
