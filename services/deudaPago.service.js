@@ -3,6 +3,7 @@ const TasaUrbanaDeuda = require("../models/tasaUrbanaDeuda.model");
 const TasaBoleta = require("../models/tasaBoleta.model");
 require("../models/tasaObjeto.model");
 const TasaUrbanaBoletaService = require("./tasaUrbanaBoleta.service");
+const { expandirDeudas } = require("./tasaUrbanaCompacto");
 const Config = require("../models/configs.model");
 
 const TIPOS = {
@@ -170,12 +171,12 @@ async function resolverUrbana(partida) {
   }
 
   const claves = clavesPartidaParaBusqueda(partida);
-  const docs = await TasaUrbanaDeuda.find({
+  const docs = await expandirDeudas(await TasaUrbanaDeuda.find({
     partida: { $in: claves },
     $or: [{ activa: true, pagado: { $ne: true } }, { pagado: true }],
   })
     .sort({ anio: -1, cuota: -1 })
-    .lean();
+    .lean());
 
   if (!docs.length) {
     const existe = await TasaUrbanaDeuda.exists({ partida: { $in: claves } });

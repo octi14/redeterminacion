@@ -66,7 +66,7 @@ exports.hidratarBoletaUrbana = function hidratarBoletaUrbana(
   return {
     ...doc,
     ...textos,
-    codigosPago,
+    codigosPago: doc.codigosPago || codigosPago,
     vencimientos: exports.hidratarVencimientos(doc, calendarioPeriodos),
   };
 };

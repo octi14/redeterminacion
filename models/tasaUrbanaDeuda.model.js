@@ -34,9 +34,18 @@ const tasaUrbanaDeudaSchema = new Schema(
     /** Solo cuando deudaAnterior y el TEXTO-2 trae montos/años personalizados. */
     mensajeBoletaPersonalizado: String,
     /** [indiceConcepto, importeCentavos] alineado a CONCEPTOS_URBANA del importador */
-    conceptosCompactos: [[Number]],
-    importeCentavos: { type: Number, required: true },
-    vencimientos: { type: [vencimientoSchema], required: true },
+    conceptosCompactos: { type: [[Number]], default: undefined },
+    importeCentavos: { type: Number },
+    vencimientos: { type: [vencimientoSchema], default: undefined },
+    /**
+     * Formato compacto (ver services/tasaUrbanaCompacto.js). Si un campo legacy está presente,
+     * tiene prioridad sobre su equivalente compacto.
+     */
+    cuentaId: { type: Schema.Types.ObjectId },
+    cc: String,
+    vt: String,
+    mp: { type: Schema.Types.ObjectId },
+    mv: String,
     /** Identifica la corrida de importación para activar/desactivar por lotes. */
     importBatchId: { type: Schema.Types.ObjectId },
     activa: { type: Boolean, default: true },

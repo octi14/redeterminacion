@@ -1,5 +1,6 @@
 const TasaUrbanaDeuda = require("../models/tasaUrbanaDeuda.model");
 const TasaUrbanaBoletaService = require("../services/tasaUrbanaBoleta.service");
+const { expandirDeudas } = require("../services/tasaUrbanaCompacto");
 const TasaUrbanaPdf = require("../services/tasaUrbanaPdf.service");
 const TasaImportacionService = require("../services/tasaImportacion.service");
 const User = require("../models/user.model");
@@ -63,12 +64,12 @@ exports.buscar = async function buscar(req, res) {
     const partidaIngresada = validarPartida(req, res);
     if (!partidaIngresada) return;
     const claves = clavesPartidaParaBusqueda(partidaIngresada);
-    const deudas = await TasaUrbanaDeuda.find({
+    const deudas = await expandirDeudas(await TasaUrbanaDeuda.find({
       partida: { $in: claves },
       activa: true,
     })
       .sort({ anio: 1, cuota: 1 })
-      .lean();
+      .lean());
     if (!deudas.length) {
       return res.status(404).json({ message: "No encontramos boletas activas para esa partida." });
     }
@@ -121,13 +122,13 @@ exports.descargar = async function descargar(req, res) {
       });
     }
     const claves = clavesPartidaParaBusqueda(partidaIngresada);
-    const deudas = await TasaUrbanaDeuda.find({
+    const deudas = await expandirDeudas(await TasaUrbanaDeuda.find({
       partida: { $in: claves },
       activa: true,
       ...filtroPeriodos(periodos),
     })
       .sort({ anio: 1, cuota: 1 })
-      .lean();
+      .lean());
     if (deudas.length !== periodos.length) {
       return res.status(404).json({ message: "Uno o más períodos seleccionados ya no están disponibles." });
     }
