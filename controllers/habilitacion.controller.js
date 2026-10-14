@@ -240,6 +240,14 @@ exports.uploadProxy = async function (req, res) {
   }
 };
 
+function digitsToNumber(value) {
+  if (value == null || value === '') return undefined;
+  const digits = String(value).replace(/\D/g, '');
+  if (!digits) return undefined;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 // Crea la habilitación. Los archivos ya deben estar en S3 (flujo presign + PUT).
 // No acepta base64 en el body para evitar R14 por payloads enormes.
 exports.add = async function (req, res) {
@@ -287,9 +295,9 @@ exports.add = async function (req, res) {
     }
 
     if (formData.solicitante) {
-      const cuit = toNumberOrUndefined(formData.solicitante.cuit);
-      const telefono = toNumberOrUndefined(formData.solicitante.telefono);
-      const cuitPersonaJuridica = toNumberOrUndefined(formData.solicitante.cuitPersonaJuridica);
+      const cuit = digitsToNumber(formData.solicitante.cuit);
+      const telefono = digitsToNumber(formData.solicitante.telefono);
+      const cuitPersonaJuridica = digitsToNumber(formData.solicitante.cuitPersonaJuridica);
       if (cuit !== undefined) formData.solicitante.cuit = cuit;
       if (telefono !== undefined) formData.solicitante.telefono = telefono;
       if (cuitPersonaJuridica !== undefined) formData.solicitante.cuitPersonaJuridica = cuitPersonaJuridica;
