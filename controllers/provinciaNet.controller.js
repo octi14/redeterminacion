@@ -1,6 +1,7 @@
 const ProvinciaNetService = require("../services/provinciaNet.service");
 const DeudaPagoService = require("../services/deudaPago.service");
 const TasaUrbanaImportacionService = require("../services/tasaUrbanaImportacion.service");
+const TasaUrbanaPublicacionService = require("../services/tasaUrbanaPublicacion.service");
 const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
 const User = require("../models/user.model");
 const fs = require("fs");
@@ -27,6 +28,17 @@ function fileName(req) {
     return decodeURIComponent(raw);
   } catch (_) {
     return raw;
+  }
+}
+
+function parseFechaHeader(req) {
+  const raw = req.headers["x-publicar-at"];
+  if (!raw) return null;
+  try {
+    const d = new Date(decodeURIComponent(Array.isArray(raw) ? raw[0] : raw));
+    return Number.isNaN(d.getTime()) ? null : d;
+  } catch (_) {
+    return null;
   }
 }
 
@@ -174,29 +186,63 @@ exports.importarUrbana = async function importarUrbana(req, res) {
       } catch (s3Error) {
         console.error("provinciaNet.importarUrbana S3:", s3Error.message);
       }
+      const publicarAt = parseFechaHeader(req);
+      const now = Date.now();
+      let estado = "pendiente_publicacion";
+      let mensaje = "Importación lista. Falta confirmar la publicación.";
+      const extra = {
+        publicarAt: publicarAt || undefined,
+        borrarAnteriorAlPublicar: Boolean(publicarAt),
+      };
       await TasaUrbanaImportacion.updateOne(
         { _id: importacion._id },
         {
           $set: {
-            estado: "completada",
             formato: data.formato,
             periodos: data.periodos || [],
             calendarioPeriodos: data.calendarioPeriodos || [],
             cantidadEntradas: data.cantidadEntradas || 0,
             cantidadObjetos: data.cantidadObjetos || 0,
             cantidadImportadas: data.cantidadImportadas || 0,
-            cantidadDesactivadas: data.cantidadDesactivadas || 0,
+            cantidadDesactivadas: 0,
             cantidadErrores: data.cantidadErrores || 0,
             cantidadAdvertencias: data.cantidadAdvertencias || 0,
             observaciones: data.observaciones || [],
             importBatchId: data.importBatchId,
             ...(archivoOriginal ? { archivoOriginal } : {}),
+            ...extra,
+          },
+        }
+      );
+      if (publicarAt && publicarAt.getTime() <= now) {
+        try {
+          const pub = await TasaUrbanaPublicacionService.publicarImportacion({
+            importacionId: importacion._id,
+            borrarAnterior: true,
+          });
+          estado = "completada";
+          mensaje = "Importación publicada. Se borró el lote anterior.";
+          extra.cantidadBorradas = pub.cantidadBorradas;
+        } catch (pubError) {
+          console.error("provinciaNet.importarUrbana publicar:", pubError.message);
+          estado = "pendiente_publicacion";
+          mensaje = "Importación lista, pero no se pudo publicar automáticamente.";
+        }
+      } else if (publicarAt) {
+        estado = "programada";
+        mensaje = "Importación programada. Se publicará en la fecha indicada.";
+      }
+      await TasaUrbanaImportacion.updateOne(
+        { _id: importacion._id },
+        {
+          $set: {
+            estado,
             progreso: {
-              etapa: "completada",
+              etapa: estado,
               procesadas: data.cantidadImportadas || 0,
               total: data.cantidadImportadas || 0,
               porcentaje: 100,
-              mensaje: "Importación completada.",
+              mensaje,
               error: "",
               actualizadoAt: new Date(),
             },
@@ -256,8 +302,8 @@ exports.progresoImportUrbana = async function progresoImportUrbana(req, res) {
     if (!job) {
       return res.status(404).json({ message: "Importación no encontrada." });
     }
-    const resultado =
-      job.estado === "completada" || job.estado === "fallida"
+    const terminada = ["completada", "fallida", "programada", "pendiente_publicacion"].includes(job.estado);
+    const resultado = terminada
         ? {
             fileName: job.nombreArchivo,
             formato: job.formato,
@@ -267,8 +313,12 @@ exports.progresoImportUrbana = async function progresoImportUrbana(req, res) {
             cantidadDesactivadas: job.cantidadDesactivadas,
             cantidadErrores: job.cantidadErrores,
             cantidadAdvertencias: job.cantidadAdvertencias,
+            cantidadBorradas: job.cantidadBorradas,
             periodos: job.periodos,
             observaciones: job.observaciones,
+            publicarAt: job.publicarAt,
+            importId: String(job._id),
+            importBatchId: job.importBatchId,
           }
         : undefined;
     return res.status(200).json({
@@ -276,6 +326,7 @@ exports.progresoImportUrbana = async function progresoImportUrbana(req, res) {
         importId: String(job._id),
         estado: job.estado,
         fileName: job.nombreArchivo,
+        publicarAt: job.publicarAt,
         progreso: job.progreso,
         resultado,
       },
@@ -310,6 +361,39 @@ exports.cambiarEstadoPeriodoUrbana = async function cambiarEstadoPeriodoUrbana(r
       anio: req.body?.anio,
       cuota: req.body?.cuota,
       habilitar: req.body?.habilitar === true,
+    });
+    return res.status(200).json({ data });
+  } catch (e) {
+    return res.status(e.status || 500).json({ message: e.message });
+  }
+};
+
+exports.publicarImportacionUrbana = async function publicarImportacionUrbana(req, res) {
+  try {
+    if (!(await usuarioPrivilegiado(req))) {
+      return res.status(403).json({ message: "No tenés permisos para esta acción." });
+    }
+    const data = await TasaUrbanaPublicacionService.publicarImportacion({
+      importacionId: req.params.importId,
+      borrarAnterior: req.body?.borrarAnterior === true,
+      periodos: Array.isArray(req.body?.periodos) ? req.body.periodos : [],
+    });
+    return res.status(200).json({ data });
+  } catch (e) {
+    return res.status(e.status || 500).json({ message: e.message });
+  }
+};
+
+exports.programarPublicacionUrbana = async function programarPublicacionUrbana(req, res) {
+  try {
+    if (!(await usuarioPrivilegiado(req))) {
+      return res.status(403).json({ message: "No tenés permisos para esta acción." });
+    }
+    const data = await TasaUrbanaPublicacionService.programarPublicacion({
+      importacionId: req.params.importId || req.body?.importacionId,
+      importBatchId: req.body?.importBatchId,
+      publicarAt: req.body?.publicarAt,
+      periodos: Array.isArray(req.body?.periodos) ? req.body.periodos : [],
     });
     return res.status(200).json({ data });
   } catch (e) {

@@ -214,10 +214,106 @@ function vista(doc, codigosPago) {
   return JSON.stringify(canonico(out));
 }
 
+function persistirCompacto(enMemoria, importBatchId) {
+  const out = {
+    partida: enMemoria.partida,
+    anio: enMemoria.anio,
+    cuota: enMemoria.cuota,
+    cuentaId: enMemoria.cuentaId,
+    importBatchId,
+    activa: false,
+  };
+  if (enMemoria.debito) out.debito = enMemoria.debito;
+  if (enMemoria.deudaAnterior) out.deudaAnterior = true;
+  if (enMemoria.cc) out.cc = enMemoria.cc;
+  if (enMemoria.vt) out.vt = enMemoria.vt;
+  if (enMemoria.mp) out.mp = enMemoria.mp;
+  if (enMemoria.mv != null && enMemoria.mv !== "") out.mv = enMemoria.mv;
+  if (Object.prototype.hasOwnProperty.call(enMemoria, "recibo")) out.recibo = enMemoria.recibo;
+  if (enMemoria.importeCentavos != null && !enMemoria.vt) out.importeCentavos = enMemoria.importeCentavos;
+  return out;
+}
+
+async function resolverCuentas(cuentasPorPartida, cache) {
+  const faltan = [];
+  for (const [partida, cuenta] of cuentasPorPartida) {
+    const cached = cache.get(partida);
+    if (cached && cached.hash === cuenta.hash) continue;
+    faltan.push(cuenta);
+  }
+  if (!faltan.length) return;
+
+  const existentes = await TasaUrbanaCuenta.find({ partida: { $in: faltan.map((item) => item.partida) } }).lean();
+  const porPartida = new Map(existentes.map((item) => [item.partida, item]));
+  const inserts = [];
+  const updates = [];
+
+  for (const cuenta of faltan) {
+    const exist = porPartida.get(cuenta.partida);
+    if (!exist) inserts.push(cuenta);
+    else if (exist.hash !== cuenta.hash) updates.push({ _id: exist._id, ...cuenta });
+    else cache.set(cuenta.partida, { _id: exist._id, hash: exist.hash });
+  }
+
+  if (inserts.length) {
+    try {
+      const docs = await TasaUrbanaCuenta.insertMany(inserts, { ordered: false });
+      docs.forEach((doc) => cache.set(doc.partida, { _id: doc._id, hash: doc.hash }));
+    } catch (error) {
+      if (error.code !== 11000 && !error.writeErrors) throw error;
+      const retry = await TasaUrbanaCuenta.find({ partida: { $in: inserts.map((item) => item.partida) } }).lean();
+      retry.forEach((doc) => cache.set(doc.partida, { _id: doc._id, hash: doc.hash }));
+    }
+  }
+  if (updates.length) {
+    await TasaUrbanaCuenta.bulkWrite(
+      updates.map((item) => ({
+        updateOne: {
+          filter: { _id: item._id },
+          update: {
+            $set: {
+              hash: item.hash,
+              contribuyente: item.contribuyente,
+              objeto: item.objeto,
+              codigosPago: item.codigosPago,
+            },
+          },
+        },
+      })),
+      { ordered: false }
+    );
+    updates.forEach((item) => cache.set(item.partida, { _id: item._id, hash: item.hash }));
+  }
+}
+
+async function resolverPlantillas(plantillasPorHash, cache) {
+  const faltan = [];
+  for (const [clave, plantilla] of plantillasPorHash) {
+    if (!cache.has(clave)) faltan.push(plantilla);
+  }
+  if (!faltan.length) return;
+  const existentes = await TasaUrbanaMensajePlantilla.find({ hash: { $in: faltan.map((item) => item.hash) } }).lean();
+  existentes.forEach((item) => cache.set(item.hash, item._id));
+  const nuevas = faltan.filter((item) => !cache.has(item.hash));
+  if (!nuevas.length) return;
+  try {
+    const docs = await TasaUrbanaMensajePlantilla.insertMany(nuevas, { ordered: false });
+    docs.forEach((doc) => cache.set(doc.hash, doc._id));
+  } catch (error) {
+    if (error.code !== 11000 && !error.writeErrors) throw error;
+    const retry = await TasaUrbanaMensajePlantilla.find({ hash: { $in: nuevas.map((item) => item.hash) } }).lean();
+    retry.forEach((item) => cache.set(item.hash, item._id));
+  }
+}
+
 module.exports = {
+  hash,
   expandirDoc,
   expandirDeudas,
   compactarDoc,
   aplicarEnMemoria,
+  persistirCompacto,
+  resolverCuentas,
+  resolverPlantillas,
   vista,
 };

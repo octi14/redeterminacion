@@ -40,6 +40,16 @@ router.put(
   requirePagoUrbanaAdmin,
   Controller.cambiarEstadoPeriodoUrbana
 );
+router.post(
+  "/urbana/importaciones/:importId/publicar",
+  requirePagoUrbanaAdmin,
+  Controller.publicarImportacionUrbana
+);
+router.put(
+  "/urbana/importaciones/:importId/publicacion",
+  requirePagoUrbanaAdmin,
+  Controller.programarPublicacionUrbana
+);
 router.get("/deuda", Controller.getDeuda);
 router.post("/preorder", Controller.createPreorder);
 router.get("/estado/:uuid", Controller.getEstado);

@@ -4,11 +4,17 @@ const AWS = require("aws-sdk");
 const Config = require("../models/configs.model");
 const TasaUrbanaDeuda = require("../models/tasaUrbanaDeuda.model");
 const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
-const TasaUrbanaPartida = require("../models/tasaUrbanaPartida.model");
 const {
   detectarDeudaAnterior,
   mensajeBoletaPersonalizadoDesdeFila,
 } = require("./tasaUrbanaTextos");
+const {
+  compactarDoc,
+  aplicarEnMemoria,
+  persistirCompacto,
+  resolverCuentas,
+  resolverPlantillas,
+} = require("./tasaUrbanaCompacto");
 
 const S3_BUCKET = process.env.AWS_BUCKET || "haciendagesell";
 const CONFIG_GUARDAR_ORIGINAL = "guardarArchivoOriginalTasas:URBANA";
@@ -270,7 +276,7 @@ function construirDoc(row, rowNumber, resultado) {
 }
 
 function prepararDocParaPersistir(doc) {
-  const { _calendario, _codigosPago, ...persistido } = doc;
+  const { _calendario, ...persistido } = doc;
   if (!persistido.mensajeBoletaPersonalizado) delete persistido.mensajeBoletaPersonalizado;
   if (!persistido.deudaAnterior) delete persistido.deudaAnterior;
   return persistido;
@@ -480,7 +486,6 @@ exports.importarArchivo = async function importarArchivo({
 } = {}) {
   const mongoose = require("mongoose");
   const importBatchId = new mongoose.Types.ObjectId();
-  const periodKeys = new Set();
 
   await reportProgress(onProgress, {
     etapa: "iniciando",
@@ -489,18 +494,36 @@ exports.importarArchivo = async function importarArchivo({
     importBatchId: String(importBatchId),
   });
 
+  const cuentaCache = new Map();
+  const plantillaCache = new Map();
   const analisis = await analizarYConstruir(filePath, {
     collectDocs: false,
     onProgress,
     onBatch: async (batch) => {
+      const cuentasLote = new Map();
+      const plantillasLote = new Map();
+      const compactos = [];
       for (const doc of batch) {
-        doc.importBatchId = importBatchId;
-        doc.activa = false;
-        periodKeys.add(`${doc.anio}|${doc.cuota}`);
+        const compacto = compactarDoc(doc, doc._codigosPago);
+        if (!compacto) continue;
+        cuentasLote.set(doc.partida, compacto.cuenta);
+        if (compacto.plantilla) plantillasLote.set(compacto.plantilla.hash, compacto.plantilla);
+        compactos.push({ doc, compacto });
       }
-      await TasaUrbanaDeuda.insertMany(batch, { ordered: false });
+      await resolverCuentas(cuentasLote, cuentaCache);
+      await resolverPlantillas(plantillasLote, plantillaCache);
+      const toInsert = compactos.map(({ doc, compacto }) => {
+        const cuenta = cuentaCache.get(doc.partida);
+        if (!cuenta?._id) throw new Error(`No se pudo resolver la cuenta de la partida ${doc.partida}.`);
+        const plantillaId = compacto.plantilla ? plantillaCache.get(compacto.plantilla.hash) : null;
+        return persistirCompacto(
+          aplicarEnMemoria(doc, compacto, cuenta._id, plantillaId),
+          importBatchId
+        );
+      });
+      await TasaUrbanaDeuda.insertMany(toInsert, { ordered: false });
       console.log(
-        `Import urbana: lote ${batch.length} insertado, ${ramMb()} MB RAM (batch ${importBatchId})`
+        `Import urbana: lote ${toInsert.length} compacto, ${ramMb()} MB RAM (batch ${importBatchId})`
       );
     },
   });
@@ -532,58 +555,16 @@ exports.importarArchivo = async function importarArchivo({
     throw err;
   }
 
-  const codigosDocs = Array.from(analisis.codigosPorPartida.entries()).map(([partida, codigosPago]) => ({
-    importBatchId,
-    partida,
-    codigosPago,
-  }));
-  if (codigosDocs.length) {
-    await TasaUrbanaPartida.insertMany(codigosDocs, { ordered: false });
-    console.log(
-      `Import urbana: ${codigosDocs.length} códigos PMC/Link por partida (${importBatchId})`
-    );
-  }
-
   await reportProgress(onProgress, {
-    etapa: "activando",
+    etapa: "finalizando",
     procesadas: analisis.cantidadImportadas,
     total: analisis.cantidadImportadas,
-    porcentaje: 92,
-    mensaje: "Activando períodos importados...",
+    porcentaje: 95,
+    mensaje: "Boletas guardadas. Pendiente de publicación.",
   });
 
-  const keys = periodKeys.size
-    ? Array.from(periodKeys)
-    : analisis.periodKeys || [];
-  const filtroPeriodos = {
-    $or: keys.map((key) => {
-      const [anio, cuota] = key.split("|").map(Number);
-      return { anio, cuota };
-    }),
-  };
-
-  const desactivadas = await TasaUrbanaDeuda.updateMany(
-    {
-      activa: true,
-      importBatchId: { $ne: importBatchId },
-      ...filtroPeriodos,
-    },
-    { $set: { activa: false } }
-  );
-
-  await TasaUrbanaDeuda.updateMany(
-    { importBatchId },
-    { $set: { activa: true } }
-  );
-
-  try {
-    await fs.promises.unlink(filePath);
-  } catch (_) {
-    /* ignore */
-  }
-
   console.log(
-    `Import urbana OK: ${analisis.cantidadImportadas} boletas, ${analisis.cantidadObjetos} partidas, archivo=${fileName || "-"}`
+    `Import urbana OK: ${analisis.cantidadImportadas} boletas compactas, ${analisis.cantidadObjetos} partidas, archivo=${fileName || "-"}`
   );
 
   return {
@@ -592,7 +573,7 @@ exports.importarArchivo = async function importarArchivo({
     cantidadEntradas: analisis.cantidadEntradas,
     cantidadObjetos: analisis.cantidadObjetos,
     cantidadImportadas: analisis.cantidadImportadas,
-    cantidadDesactivadas: desactivadas.modifiedCount || 0,
+    cantidadDesactivadas: 0,
     cantidadErrores: analisis.cantidadErrores,
     cantidadAdvertencias: analisis.cantidadAdvertencias,
     periodos: analisis.periodos,
@@ -675,7 +656,7 @@ exports.obtenerProgreso = async function obtenerProgreso(importId) {
 
 exports.listarPeriodosCargados = async function listarPeriodosCargados() {
   const TasaUrbanaImportacion = require("../models/tasaUrbanaImportacion.model");
-  return TasaUrbanaDeuda.aggregate([
+  const rows = await TasaUrbanaDeuda.aggregate([
     {
       $group: {
         _id: { importBatchId: "$importBatchId", anio: "$anio", cuota: "$cuota" },
@@ -723,13 +704,24 @@ exports.listarPeriodosCargados = async function listarPeriodosCargados() {
         estadoImportacion: {
           $ifNull: ["$importacion.estado", "completada"],
         },
+        publicarAtImportacion: "$importacion.publicarAt",
+        periodosPublicacion: { $ifNull: ["$importacion.periodosPublicacion", []] },
         publicadoAt: {
-          $ifNull: ["$importacion.updatedAt", "$actualizadoAt"],
+          $ifNull: ["$importacion.publicadoAt", { $ifNull: ["$importacion.updatedAt", "$actualizadoAt"] }],
         },
       },
     },
     { $sort: { anio: -1, cuota: 1, habilitado: -1, publicadoAt: -1 } },
   ]);
+  return rows.map((row) => {
+    const override = (row.periodosPublicacion || []).find(
+      (item) => item.anio === row.anio && item.cuota === row.cuota
+    );
+    return {
+      ...row,
+      publicarAt: override?.publicarAt || row.publicarAtImportacion || null,
+    };
+  });
 };
 
 exports.cambiarEstadoPeriodo = async function cambiarEstadoPeriodo({

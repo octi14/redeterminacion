@@ -34,7 +34,7 @@ const tasaUrbanaImportacionSchema = new Schema(
     hashArchivo: { type: String },
     estado: {
       type: String,
-      enum: ["procesando", "completada", "fallida"],
+      enum: ["procesando", "pendiente_publicacion", "programada", "completada", "fallida"],
       default: "procesando",
       index: true,
     },
@@ -49,6 +49,22 @@ const tasaUrbanaImportacionSchema = new Schema(
     cantidadAdvertencias: { type: Number, default: 0 },
     observaciones: { type: [observaciónSchema], default: [] },
     importBatchId: { type: Schema.Types.ObjectId, index: true },
+    publicarAt: { type: Date, index: true },
+    periodosPublicacion: {
+      type: [
+        {
+          anio: { type: Number, required: true },
+          cuota: { type: Number, required: true },
+          publicarAt: { type: Date, required: true },
+          publicadoAt: { type: Date },
+        },
+      ],
+      default: [],
+    },
+    borrarAnteriorAlPublicar: { type: Boolean, default: false },
+    anteriorBorrada: { type: Boolean, default: false },
+    publicadoAt: { type: Date },
+    cantidadBorradas: { type: Number, default: 0 },
     subidoPor: {
       id: { type: Schema.Types.ObjectId, ref: "users" },
       username: { type: String },

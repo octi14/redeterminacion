@@ -1,6 +1,7 @@
 const TasaUrbanaDeuda = require("../models/tasaUrbanaDeuda.model");
 const TasaUrbanaBoletaService = require("../services/tasaUrbanaBoleta.service");
 const { expandirDeudas } = require("../services/tasaUrbanaCompacto");
+const { aplicarPublicacionesPendientes } = require("../services/tasaUrbanaPublicacion.service");
 const TasaUrbanaPdf = require("../services/tasaUrbanaPdf.service");
 const TasaImportacionService = require("../services/tasaImportacion.service");
 const User = require("../models/user.model");
@@ -63,6 +64,7 @@ exports.buscar = async function buscar(req, res) {
     }
     const partidaIngresada = validarPartida(req, res);
     if (!partidaIngresada) return;
+    await aplicarPublicacionesPendientes();
     const claves = clavesPartidaParaBusqueda(partidaIngresada);
     const deudas = await expandirDeudas(await TasaUrbanaDeuda.find({
       partida: { $in: claves },
@@ -122,6 +124,7 @@ exports.descargar = async function descargar(req, res) {
       });
     }
     const claves = clavesPartidaParaBusqueda(partidaIngresada);
+    await aplicarPublicacionesPendientes();
     const deudas = await expandirDeudas(await TasaUrbanaDeuda.find({
       partida: { $in: claves },
       activa: true,

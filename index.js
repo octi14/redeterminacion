@@ -7,10 +7,16 @@ mongoose.set('strictQuery', true); // Agrega esta línea
 // Para verificar en producción que se usa villa-gesell: el host se imprime al conectar (sin credenciales).
 const mongoHost = config.MONGO_URL && config.MONGO_URL.match(/@([^/]+)/)?.[1];
 mongoose
-  .connect(config.MONGO_URL)
-  .then(() => {
+    .connect(config.MONGO_URL)
+  .then(async () => {
     console.log("Successfully Established Connection with MongoDB");
     console.log("MongoDB host:", mongoHost || "(no detectado)");
+    const {
+      asegurarEsquemaCuentas,
+      iniciarPublicadorUrbana,
+    } = require("./services/tasaUrbanaPublicacion.service");
+    await asegurarEsquemaCuentas();
+    iniciarPublicadorUrbana();
   })
   .catch((err) => {
     console.log(

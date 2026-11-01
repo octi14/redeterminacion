@@ -4,6 +4,7 @@ const TasaBoleta = require("../models/tasaBoleta.model");
 require("../models/tasaObjeto.model");
 const TasaUrbanaBoletaService = require("./tasaUrbanaBoleta.service");
 const { expandirDeudas } = require("./tasaUrbanaCompacto");
+const { aplicarPublicacionesPendientes } = require("./tasaUrbanaPublicacion.service");
 const Config = require("../models/configs.model");
 
 const TIPOS = {
@@ -171,6 +172,7 @@ async function resolverUrbana(partida) {
   }
 
   const claves = clavesPartidaParaBusqueda(partida);
+  await aplicarPublicacionesPendientes();
   const docs = await expandirDeudas(await TasaUrbanaDeuda.find({
     partida: { $in: claves },
     $or: [{ activa: true, pagado: { $ne: true } }, { pagado: true }],

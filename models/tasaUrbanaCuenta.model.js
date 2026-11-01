@@ -1,6 +1,6 @@
 const { Schema, model } = require("mongoose");
 
-/** Versión de los datos de una partida; varias boletas (y tiradas) la comparten mientras no cambie. */
+/** Una cuenta por partida; las boletas de todos los períodos apuntan acá. */
 const tasaUrbanaCuentaSchema = new Schema(
   {
     partida: { type: String, required: true },
@@ -29,6 +29,6 @@ const tasaUrbanaCuentaSchema = new Schema(
   }
 );
 
-tasaUrbanaCuentaSchema.index({ partida: 1, hash: 1 }, { unique: true });
+tasaUrbanaCuentaSchema.index({ partida: 1 }, { unique: true });
 
 module.exports = model("tasaUrbanaCuenta", tasaUrbanaCuentaSchema);
