@@ -1,5 +1,11 @@
 const AbiertoAnual = require('../models/abiertoAnual.model');
 const AbiertoAnualService = require('../services/abiertoAnual.service');
+const {
+  parsePeriodo,
+  assertPeriodArrays,
+  isValidFacturaUrl,
+  keyFromUrl,
+} = require('../services/abiertoAnualValidation');
 const mongoose = require('mongoose');
 const ObjectId = mongoose.Types.ObjectId;
 const AWS = require('aws-sdk');
@@ -14,8 +20,12 @@ const s3 = new AWS.S3({
 exports.addDocument = async function (req, res) {
   try {
     const { id } = req.params;
-    const { periodo } = req.body;
+    const periodo = parsePeriodo(req.body.periodo);
     const documento = req.body.factura;
+
+    if (periodo == null) {
+      return res.status(400).json({ message: 'Período inválido. Debe ser 0, 1 o 2.' });
+    }
 
     if (!documento || !documento.contenido || !documento.contenido.data || !documento.contenido.contentType) {
       return res.status(400).json({ message: 'Faltan datos del documento' });
@@ -27,44 +37,57 @@ exports.addDocument = async function (req, res) {
       return res.status(404).json({ message: 'Registro no encontrado' });
     }
 
+    assertPeriodArrays(abiertoAnual);
+
     // Si ya hay un documento cargado en esa posición, lo eliminamos de S3
-    if (abiertoAnual.facturas && abiertoAnual.facturas[periodo] && abiertoAnual.facturas[periodo].url) {
-      const keyAnterior = abiertoAnual.facturas[periodo].url.split('/').pop();
-      const paramsDelete = {
-        Bucket: 'haciendagesell',
-        Key: `abierto-anual/${keyAnterior}`
-      };
-      try {
-        await s3.deleteObject(paramsDelete).promise();
-      } catch (err) {
-        console.log('No se pudo eliminar archivo anterior de S3:', err.message);
+    if (abiertoAnual.facturas[periodo] && abiertoAnual.facturas[periodo].url) {
+      const prevKey = keyFromUrl(abiertoAnual.facturas[periodo].url);
+      if (prevKey) {
+        try {
+          await s3.deleteObject({
+            Bucket: 'haciendagesell',
+            Key: prevKey,
+          }).promise();
+        } catch (err) {
+          console.log('No se pudo eliminar archivo anterior de S3:', err.message);
+        }
       }
     }
 
     // Armar el nuevo archivo
-    const cuit = abiertoAnual.cuit? abiertoAnual.cuit : '';
+    const cuit = abiertoAnual.cuit ? abiertoAnual.cuit : '';
     const nroLegajo = abiertoAnual.nroLegajo;
     const contentType = documento.contenido.contentType;
-    const extension = contentType.split('/')[1]; // Ejemplo: 'pdf'
-    // Crear el nombre de archivo usando la estructura proporcionada
+    const extension = (contentType.split('/')[1] || 'pdf').split(';')[0];
     const nombreArchivo = `abierto-anual/${cuit}_${nroLegajo}_${periodo}.${extension}`;
     const buffer = Buffer.from(documento.contenido.data, 'base64');
 
     const paramsUpload = {
       Bucket: 'haciendagesell',
-      Key: nombreArchivo, // Ruta con la carpeta 'abierto-anual/'
+      Key: nombreArchivo,
       Body: buffer,
       ContentType: contentType,
     };
 
     const uploadResult = await s3.upload(paramsUpload).promise();
 
-    // Guardar en la base de datos
-    abiertoAnual.facturas[periodo] = {
-      url: uploadResult.Location
-    };
-    abiertoAnual.fechasCarga[periodo] = new Date();
-    abiertoAnual.status[periodo] = 'En revisión';
+    if (!isValidFacturaUrl(uploadResult.Location, cuit, nroLegajo, periodo)) {
+      return res.status(500).json({
+        message: 'La URL generada no coincide con el período. No se guardó el registro.',
+      });
+    }
+
+    const prevObs = abiertoAnual.facturas[periodo]?.observaciones || '';
+    abiertoAnual.facturas.set(periodo, {
+      url: uploadResult.Location,
+      observaciones: prevObs,
+      rectificando: false,
+    });
+    abiertoAnual.set(`fechasCarga.${periodo}`, new Date());
+    abiertoAnual.set(`status.${periodo}`, 'En revisión');
+    abiertoAnual.markModified('facturas');
+    abiertoAnual.markModified('fechasCarga');
+    abiertoAnual.markModified('status');
 
     await abiertoAnual.save();
 
@@ -158,25 +181,55 @@ exports.getFacturasById = async (req, res) => {
       });
     }
 
-    const facturasObj = tramite.facturas || {};
+    const facturasArr = Array.isArray(tramite.facturas) ? tramite.facturas : [];
+    const statusArr = Array.isArray(datosTramite.status) ? datosTramite.status : [];
     const documentosObtenidos = {};
+    const region = process.env.AWS_REGION || 'us-east-2';
+    const bucketHost = `https://haciendagesell.s3.${region}.amazonaws.com/`;
 
-    for (const [periodo, factura] of Object.entries(facturasObj)) {
+    const keyFromUrl = (url) => {
+      if (!url || typeof url !== 'string') return null;
       try {
-        // El nombre de la carpeta y prefijo para el archivo
-        const prefix = `abierto-anual/${datosTramite.cuit}_${datosTramite.nroLegajo}_${periodo}`;
+        return decodeURIComponent(new URL(url).pathname.replace(/^\//, ''));
+      } catch {
+        return null;
+      }
+    };
 
-        // Buscar archivos que coincidan con ese prefijo en la carpeta 'abierto-anual'
+    const periodFromKey = (key) => {
+      const m = String(key || '').match(/_(\d+)\.[^./]+$/);
+      return m ? Number(m[1]) : null;
+    };
+
+    for (let periodo = 0; periodo < Math.max(facturasArr.length, statusArr.length, 3); periodo++) {
+      const factura = facturasArr[periodo];
+      const status = statusArr[periodo];
+      const expectsFile = !!(factura && factura.url) || (status && status !== 'Incompleto');
+      if (!expectsFile) continue;
+
+      try {
+        const prefix = `abierto-anual/${datosTramite.cuit}_${datosTramite.nroLegajo}_${periodo}`;
+        let fileKey = null;
+
         const listResponse = await s3.listObjectsV2({
           Bucket: 'haciendagesell',
           Prefix: prefix,
+          MaxKeys: 5,
         }).promise();
 
-        if (!listResponse.Contents || listResponse.Contents.length === 0) {
+        if (listResponse.Contents && listResponse.Contents.length > 0) {
+          fileKey = listResponse.Contents[0].Key;
+        } else if (factura?.url) {
+          const fromUrl = keyFromUrl(factura.url);
+          if (fromUrl && periodFromKey(fromUrl) === periodo) {
+            fileKey = fromUrl;
+          }
+        }
+
+        if (!fileKey) {
           throw new Error(`No se encontraron archivos para el prefijo: ${prefix}`);
         }
 
-        const fileKey = listResponse.Contents[0].Key;
         const data = await s3.getObject({
           Bucket: 'haciendagesell',
           Key: fileKey,
@@ -188,12 +241,13 @@ exports.getFacturasById = async (req, res) => {
           contentType: data.ContentType,
           data: data.Body.toString('base64'),
           filename: `${periodo}.${extension}`,
+          url: `${bucketHost}${fileKey}`,
         };
       } catch (error) {
         console.error(`Error descargando archivo desde S3 para factura ${periodo}:`, error.message);
 
         documentosObtenidos[periodo] = {
-          error: `Archivo no encontrado en S3.`,
+          error: 'Archivo no encontrado.',
         };
       }
     }
